@@ -1,0 +1,406 @@
+import { QuizState } from './types';
+
+export const INITIAL_QUIZ_STATE: QuizState = {
+  title: 'Viplava 2026: Srila Prabhupada Maha Quiz',
+  theme: 'A Transcendental Revolution in Thought & Culture',
+  location: 'Gokul, Mathura Dham',
+  year: '2026',
+  phase: 'LOBBY',
+  timer: {
+    secondsLeft: 30,
+    initialSeconds: 30,
+    isRunning: false,
+    lastUpdated: 0,
+  },
+  participants: [
+    {
+      id: 'p1',
+      seatNumber: 1,
+      name: 'Seat 1: Arjun',
+      spiritualName: 'Arjun Das',
+      avatar: '🦚',
+      totalScore: 0,
+      scores: { round1: 0, round2: 0, round3: 0, tieBreaker: 0 },
+      connected: true,
+    },
+    {
+      id: 'p2',
+      seatNumber: 2,
+      name: 'Seat 2: Nimai',
+      spiritualName: 'Nimai Pandit',
+      avatar: '🪷',
+      totalScore: 0,
+      scores: { round1: 0, round2: 0, round3: 0, tieBreaker: 0 },
+      connected: true,
+    },
+    {
+      id: 'p3',
+      seatNumber: 3,
+      name: 'Seat 3: Ramanuja',
+      spiritualName: 'Ramanuja Das',
+      avatar: '🐚',
+      totalScore: 0,
+      scores: { round1: 0, round2: 0, round3: 0, tieBreaker: 0 },
+      connected: true,
+    },
+    {
+      id: 'p4',
+      seatNumber: 4,
+      name: 'Seat 4: Madhva',
+      spiritualName: 'Madhvacharya Das',
+      avatar: '🚩',
+      totalScore: 0,
+      scores: { round1: 0, round2: 0, round3: 0, tieBreaker: 0 },
+      connected: true,
+    },
+    {
+      id: 'p5',
+      seatNumber: 5,
+      name: 'Seat 5: Gadadhar',
+      spiritualName: 'Gadadhar Das',
+      avatar: '🕉️',
+      totalScore: 0,
+      scores: { round1: 0, round2: 0, round3: 0, tieBreaker: 0 },
+      connected: true,
+    },
+    {
+      id: 'p6',
+      seatNumber: 6,
+      name: 'Seat 6: Sanatan',
+      spiritualName: 'Sanatan Das',
+      avatar: '📜',
+      totalScore: 0,
+      scores: { round1: 0, round2: 0, round3: 0, tieBreaker: 0 },
+      connected: true,
+    },
+  ],
+  rules: {
+    round1: `✨ ROUND 1: ONE-TO-ONE DIRECT & PASS ROUND
+• Direct Question: Asked specifically to one designated participant.
+• Points for Direct Correct Answer: +10 Points.
+• Time limit: 30 seconds per direct question.
+• Pass-on Rule: If the participant is unable to answer or passes, the question is transferred directly to the immediate next participant.
+• Pass Limit: Only ONE pass is allowed per question (Direct → 1 Pass max).
+• Points for Pass Correct Answer: +5 Points awarded to the receiving participant.
+• If neither can answer, the Host reveals the correct answer.`,
+
+    round2: `⚡ ROUND 2: RAPID FIRE ROUND
+• Structure: Each participant steps up for an intense rapid fire volley of 10 questions!
+• Time limit: 60 seconds total clock for all 10 questions.
+• Points: +10 Points awarded for every correct answer given during their turn.
+• No negative points for skipped or wrong answers in this round.
+• Speed and spiritual precision are key to maximizing your tally!`,
+
+    round3: `🔔 ROUND 3: THE HIGH-STAKES BUZZER ROUND
+• Structure: Open-for-all competitive round.
+• Question and 4 options will be displayed on the screen.
+• Once the Host unlocks the buzzer, participants hit their mobile buzzer button!
+• First to Buzzer: The first participant whose buzzer locks gets the exclusive right to answer.
+• Correct Answer: +15 Points awarded!
+• Incorrect Answer: -5 Points penalty (Negative Marking applies!).
+• High risk, glorious transcendental reward!`,
+
+    tieBreaker: `🎯 TIE-BREAKER: FASTEST-FINGER-FIRST (FFF)
+• Applicable if two or more participants are tied for winning or podium positions.
+• Tied participants receive a synchronized question with 4 options on their mobile screen.
+• Both accuracy and reaction speed are calculated down to the millisecond!
+• The fastest participant with the correct answer wins the tie-break!`,
+  },
+  round1Questions: [
+    {
+      id: 'r1-q1',
+      assignedSeat: 1,
+      category: 'Early Life & Guru',
+      question: 'In which year and in which sacred city did Abhay Charan De (Srila Prabhupada) first meet his spiritual master, Srila Bhaktisiddhanta Sarasvati Thakura?',
+      options: ['1922 in Calcutta (Ultadanga)', '1932 in Allahabad', '1936 in Bombay', '1918 in Mayapur'],
+      correctAnswer: '1922 in Calcutta (Ultadanga)',
+      explanation: 'Srila Prabhupada first met his Guru Maharaja in 1922 on the rooftop of Ultadanga Junction Road, Calcutta, where Srila Bhaktisiddhanta immediately instructed him to preach Lord Chaitanya’s message in English to the Western world.',
+    },
+    {
+      id: 'r1-q2',
+      assignedSeat: 2,
+      category: 'Historic Voyage',
+      question: 'What was the name of the steamship on which Srila Prabhupada journeyed across the turbulent Arabian Sea and Atlantic Ocean to America in 1965?',
+      options: ['SS Jaladuta (Scindia Steamship)', 'SS Titanic', 'MV Ganga Doot', 'SS Victoria'],
+      correctAnswer: 'SS Jaladuta (Scindia Steamship)',
+      explanation: 'Srila Prabhupada boarded the freighter steamship Jaladuta on August 13, 1965, enduring 38 days of sea voyage and two severe heart attacks before arriving at Boston Pier.',
+    },
+    {
+      id: 'r1-q3',
+      assignedSeat: 3,
+      category: 'Matchless Gift NYC',
+      question: 'What historic address in New York’s Lower East Side became the very first ISKCON center established by Srila Prabhupada in 1966?',
+      options: ['26 Second Avenue', '72 Bowery Street', '108 Fifth Avenue', '43rd Street Manhattan'],
+      correctAnswer: '26 Second Avenue',
+      explanation: 'In July 1966, Srila Prabhupada rented a small storefront at 26 Second Avenue in Manhattan, which famously had the original sign "Matchless Gifts".',
+    },
+    {
+      id: 'r1-q4',
+      assignedSeat: 4,
+      category: 'Mathura & Gokul Dham',
+      question: 'Under what circumstances did Vasudeva carry infant baby Krishna across the Yamuna from Kamsa’s prison in Mathura to Nanda Maharaja’s palace in Gokul?',
+      options: [
+        'A stormy midnight with Yamuna parting and Shesha Naga providing an umbrella',
+        'At high noon accompanied by royal guards',
+        'In a golden chariot across a wooden bridge',
+        'By sailing on a decorated peacock boat'
+      ],
+      correctAnswer: 'A stormy midnight with Yamuna parting and Shesha Naga providing an umbrella',
+      explanation: 'On the stormy midnight of Krishna Janmashtami, the iron chains fell off, prison gates miraculously opened, and Vasudeva carried baby Krishna in a wicker basket across the Yamuna river while Lord Shesha protected them from driving rain.',
+    },
+    {
+      id: 'r1-q5',
+      assignedSeat: 5,
+      category: 'The Viplava Verse',
+      question: 'The theme "Viplava" is inspired by Srimad Bhagavatam 1.5.11 ("tad-vag-visargo janata-agha-viplavo..."). What does the word "Viplava" mean in this transcendental context?',
+      options: [
+        'A revolution that overturns the impious sins of humanity',
+        'A royal battle between demigods and demons',
+        'A tranquil silence without any vibration',
+        'A scholastic debate in royal courts'
+      ],
+      correctAnswer: 'A revolution that overturns the impious sins of humanity',
+      explanation: 'Srila Prabhupada translates "janata-agha-viplavo": literature full of transcendental glories of Krishna brings about a revolution (viplava) in the impious lives of this world’s misdirected civilization.',
+    },
+    {
+      id: 'r1-q6',
+      assignedSeat: 6,
+      category: 'Literary Legacy',
+      question: 'Which sacred magazine did Srila Prabhupada single-handedly write, finance, print, and distribute in Delhi and Calcutta starting in 1944 during World War II?',
+      options: ['Back to Godhead', 'The Harmonist', 'Kalyana Kalpataru', 'Gaudiya Patrika'],
+      correctAnswer: 'Back to Godhead',
+      explanation: 'Srila Prabhupada founded Back to Godhead magazine in 1944 in English, typing each article himself and distributing copies on the hot streets of Delhi.',
+    },
+  ],
+  round2Sets: [
+    {
+      seatNumber: 1,
+      questions: [
+        { id: 'r2-p1-1', question: 'In which year was Srila Prabhupada born on the day after Janmashtami (Nandotsava)?', answer: '1896 (September 1)' },
+        { id: 'r2-p1-2', question: 'What was Srila Prabhupada’s childhood family name given by his father Gour Mohan De?', answer: 'Abhay Charan' },
+        { id: 'r2-p1-3', question: 'Which college in Calcutta did young Abhay attend?', answer: 'Scottish Church College' },
+        { id: 'r2-p1-4', question: 'In which year did Srila Prabhupada formally accept Sannyasa in Mathura?', answer: '1959' },
+        { id: 'r2-p1-5', question: 'Who gave Sannyasa initiation to Srila Prabhupada at Sri Keshavaji Gaudiya Math?', answer: 'Srila Bhakti Prajnana Keshava Gosvami Maharaja' },
+        { id: 'r2-p1-6', question: 'What sacred poem did Srila Prabhupada write aboard the Jaladuta at Commonwealth Pier?', answer: 'Markine Bhagavata-dharma' },
+        { id: 'r2-p1-7', question: 'Under which tree in Tompkins Square Park did Srila Prabhupada chant the Hare Krishna mantra in 1966?', answer: 'Hare Krishna Tree (Elm Tree)' },
+        { id: 'r2-p1-8', question: 'How many cantos does Srimad Bhagavatam contain in total?', answer: '12 Cantos' },
+        { id: 'r2-p1-9', question: 'Which demoness attempted to kill infant Krishna in Gokul by nursing poisoned milk?', answer: 'Putana' },
+        { id: 'r2-p1-10', question: 'What was the original company of Sumati Morarjee who gave Prabhupada free passage to USA?', answer: 'Scindia Steam Navigation Company' },
+      ],
+    },
+    {
+      seatNumber: 2,
+      questions: [
+        { id: 'r2-p2-1', question: 'In which month and year was the International Society for Krishna Consciousness (ISKCON) incorporated?', answer: 'July 1966 (July 13)' },
+        { id: 'r2-p2-2', question: 'What is the sacred river that flows through Mathura and Gokul Dham?', answer: 'Yamuna (Kalindi)' },
+        { id: 'r2-p2-3', question: 'Name the hill that Lord Krishna lifted on the little finger of His left hand for seven days.', answer: 'Govardhana Hill' },
+        { id: 'r2-p2-4', question: 'In which sacred room/temple in Vrindavan did Srila Prabhupada live and translate the First Canto of Bhagavatam?', answer: 'Radha Damodara Temple' },
+        { id: 'r2-p2-5', question: 'Who was Srila Prabhupada’s beloved mother who passed away when he was young?', answer: 'Rajani De' },
+        { id: 'r2-p2-6', question: 'Which historic temple was opened by Srila Prabhupada in Vrindavan in 1975 on Ram Navami?', answer: 'Sri Sri Krishna Balaram Mandir' },
+        { id: 'r2-p2-7', question: 'What is the full publishing trust established by Srila Prabhupada in 1972 to print his books?', answer: 'Bhaktivedanta Book Trust (BBT)' },
+        { id: 'r2-p2-8', question: 'Which Beatle musician sponsored the printing of the Krishna Book and recorded the Radha Krishna Temple album?', answer: 'George Harrison' },
+        { id: 'r2-p2-9', question: 'Name the two brothers who were liberated by baby Krishna when He pulled the wooden mortar between two Yamala-Arjuna trees.', answer: 'Nalakuvara and Manigriva' },
+        { id: 'r2-p2-10', question: 'What year did Srila Prabhupada depart this mortal world in Vrindavan?', answer: '1977 (November 14)' },
+      ],
+    },
+    {
+      seatNumber: 3,
+      questions: [
+        { id: 'r2-p3-1', question: 'How many verses are there in the Bhagavad-gita As It Is translated by Srila Prabhupada?', answer: '700 Verses' },
+        { id: 'r2-p3-2', question: 'In which year did Srila Prabhupada establish the Governing Body Commission (GBC)?', answer: '1970' },
+        { id: 'r2-p3-3', question: 'What was the famous farm community founded by Srila Prabhupada in West Virginia?', answer: 'New Vrindaban' },
+        { id: 'r2-p3-4', question: 'Who was the king of Mathura who imprisoned Devaki and Vasudeva?', answer: 'Kamsa' },
+        { id: 'r2-p3-5', question: 'How many times did Srila Prabhupada travel around the entire globe to spread Krishna Consciousness?', answer: '14 times' },
+        { id: 'r2-p3-6', question: 'What was the name of the first temple president of 26 2nd Avenue and early disciple (Brahmananda)?', answer: 'Brahmananda Das (Bruce Scharf)' },
+        { id: 'r2-p3-7', question: 'In Srimad Bhagavatam, who speaks the teachings of the Gita of Bhagavatam (Uddhava Gita) to Uddhava?', answer: 'Lord Krishna' },
+        { id: 'r2-p3-8', question: 'What is the name of the place in Gokul where baby Krishna crawled with butter all over His face?', answer: 'Ukhal Bandhan / Nanda Bhavan' },
+        { id: 'r2-p3-9', question: 'Which English magistrate in Bengal was Srila Bhaktivinoda Thakura, Prabhupada’s grand-guru?', answer: 'Kedarnath Datta (Srila Bhaktivinoda)' },
+        { id: 'r2-p3-10', question: 'What sweet preparation is traditionally famous at Gokul and Mathura?', answer: 'Mathura Peda / Makkhan Mishri' },
+      ],
+    },
+    {
+      seatNumber: 4,
+      questions: [
+        { id: 'r2-p4-1', question: 'What was the title given to Srila Prabhupada in 1947 by Gaudiya Vaishnava scholars?', answer: 'Bhaktivedanta' },
+        { id: 'r2-p4-2', question: 'Name the whirlpool demon sent by Kamsa to Gokul who was slain by infant Krishna.', answer: 'Trinavarta' },
+        { id: 'r2-p4-3', question: 'How many primary principles/regulative freedoms did Srila Prabhupada institute for his disciples?', answer: '4 Regulative Principles' },
+        { id: 'r2-p4-4', question: 'What is the daily minimum number of rounds of the Hare Krishna Maha-mantra chanted on japa beads?', answer: '16 Rounds' },
+        { id: 'r2-p4-5', question: 'Which sacred lake in Vrindavan is considered the topmost of all holy bathing places?', answer: 'Radha Kunda' },
+        { id: 'r2-p4-6', question: 'What was the title of the small booklet written by Prabhupada in 1960 anticipating space travel?', answer: 'Easy Journey to Other Planets' },
+        { id: 'r2-p4-7', question: 'What deity did young Abhay worship and hold a mini Ratha Yatra festival for as a boy in Calcutta?', answer: 'Lord Jagannatha' },
+        { id: 'r2-p4-8', question: 'In which European city did Srila Prabhupada install Sri Sri Radha Gokulananda at Bhaktivedanta Manor?', answer: 'Watford / London (UK)' },
+        { id: 'r2-p4-9', question: 'Who was the divine nurse and foster mother of Krishna in Gokul?', answer: 'Mother Yashoda' },
+        { id: 'r2-p4-10', question: 'What year marks the 60th anniversary of ISKCON’s founding, coinciding with Viplava 2026?', answer: '2026 (1966 to 2026 = 60 Years)' },
+      ],
+    },
+    {
+      seatNumber: 5,
+      questions: [
+        { id: 'r2-p5-1', question: 'How many total words are there in the Hare Krishna Maha-mantra?', answer: '16 Words (32 syllables)' },
+        { id: 'r2-p5-2', question: 'What is the name of the colossal headquarters temple established by Srila Prabhupada in West Bengal?', answer: 'Sri Mayapur Chandrodaya Mandir (TOVP)' },
+        { id: 'r2-p5-3', question: 'Who was the demon disguised as a giant crane sent to kill Krishna in Vraja?', answer: 'Bakasura' },
+        { id: 'r2-p5-4', question: 'What was Srila Prabhupada’s chemical business pharmacy called in Allahabad?', answer: 'Prayag Pharmacy' },
+        { id: 'r2-p5-5', question: 'What does the word "Viplava" directly counteract according to Narada Muni in Srimad Bhagavatam?', answer: 'Janata-agha (The sins and impious direction of human society)' },
+        { id: 'r2-p5-6', question: 'Which sacred text of Sri Chaitanya Mahaprabhu’s life did Srila Prabhupada translate into 17 volumes in 18 months?', answer: 'Sri Chaitanya Charitamrita' },
+        { id: 'r2-p5-7', question: 'What is the name of the elder brother of Lord Krishna worshipped in Mathura-Vrindavan?', answer: 'Lord Balarama' },
+        { id: 'r2-p5-8', question: 'In which USA city did the first ever Ratha Yatra outside India take place in 1967?', answer: 'San Francisco' },
+        { id: 'r2-p5-9', question: 'What flower is sacred to Lord Krishna and always offered with Tulasi leaves at His lotus feet?', answer: 'Lotus (or Parijata / Kadamba)' },
+        { id: 'r2-p5-10', question: 'What did Srila Prabhupada declare as his "real life" and transcendental weapon for world transformation?', answer: 'His Books ("My books are my life")' },
+      ],
+    },
+    {
+      seatNumber: 6,
+      questions: [
+        { id: 'r2-p6-1', question: 'At what age did Srila Prabhupada board the Jaladuta to sail alone to the West?', answer: '69 years old' },
+        { id: 'r2-p6-2', question: 'Who was the demonic serpent that entered Gokul/Vrindavan like a huge cave?', answer: 'Aghasura' },
+        { id: 'r2-p6-3', question: 'What sacred holy forest comprises the 12 principal forests of Vraja Mandala?', answer: 'Vrindavan / Vraja Mandala' },
+        { id: 'r2-p6-4', question: 'Which king heard the Srimad Bhagavatam from Sukadeva Gosvami on the bank of the Ganges for 7 days?', answer: 'Maharaja Pariksit' },
+        { id: 'r2-p6-5', question: 'What is the name of the sacred sound vibration representing Lord Krishna throughout the cosmos?', answer: 'Omkara (Pranava) / Hare Krishna' },
+        { id: 'r2-p6-6', question: 'What title did Srila Prabhupada give to the scientific research branch of ISKCON?', answer: 'Bhaktivedanta Institute' },
+        { id: 'r2-p6-7', question: 'In which year did Srila Prabhupada leave his family life to devote himself completely to writing and preaching?', answer: '1950 (Vanaprastha)' },
+        { id: 'r2-p6-8', question: 'What was the famous park in San Francisco where Prabhupada chanted and called it "New Jagannatha Puri"?', answer: 'Golden Gate Park (Haight-Ashbury)' },
+        { id: 'r2-p6-9', question: 'In Mathura, at which prison cell ghat is Krishna Janmabhoomi located?', answer: 'Potra Kund / Janmabhoomi Complex' },
+        { id: 'r2-p6-10', question: 'What is the primary spiritual goal of Viplava 2026 at Gokul Mathura Dham?', answer: 'Igniting a transcendental youth revolution of pure devotion, book distribution, and harinama sankirtana' },
+      ],
+    },
+  ],
+  round3Questions: [
+    {
+      id: 'r3-q1',
+      question: 'When Srila Prabhupada arrived in Boston Harbour on September 17, 1965, with only 40 rupees and a crate of Srimad Bhagavatam, at which pier did the ship dock?',
+      options: ['Commonwealth Pier', 'Long Wharf Pier', 'Boston Navy Yard', 'Battery Park Pier'],
+      correctOptionIndex: 0,
+      pointsCorrect: 15,
+      pointsWrong: -5,
+      explanation: 'Srila Prabhupada docked at Commonwealth Pier in Boston on September 17, 1965, where he wrote his immortal Bengali poem "Markine Bhagavata-dharma".',
+    },
+    {
+      id: 'r3-q2',
+      question: 'In the Srimad Bhagavatam verse 1.5.11, Narada Muni tells Srila Vyasadeva that words which glorify the transcendental Lord are heard, chanted, and accepted by which elevated souls?',
+      options: ['Sadhavo vipascitah (purified and honest men)', 'Karma-kandis seeking wealth', 'Scholars of speculative grammar', 'Rulers seeking empire'],
+      correctOptionIndex: 0,
+      pointsCorrect: 15,
+      pointsWrong: -5,
+      explanation: 'Narada states: "tad-vag-visargo janata-agha-viplavo... srnvanti gayanti grnanti sadhavah" — such transcendental literatures are heard, sung, and accepted by purified honest persons.',
+    },
+    {
+      id: 'r3-q3',
+      question: 'Which of the following sacred shrines in Vrindavan houses the Samadhi Mandir and Bhajan Kutir of Srila Prabhupada?',
+      options: ['Sri Sri Krishna Balaram Mandir', 'Radha Vallabha Mandir', 'Banke Bihari Mandir', 'Govindaji Mandir'],
+      correctOptionIndex: 0,
+      pointsCorrect: 15,
+      pointsWrong: -5,
+      explanation: 'Srila Prabhupada’s Samadhi Mandir is located within the courtyard of the Krishna Balaram Mandir in Raman Reti, Vrindavan.',
+    },
+    {
+      id: 'r3-q4',
+      question: 'In Gokul, when Mother Yashoda tied little Krishna to the grinding mortar (Damodara-lila), what transcendental quality of Krishna did she manifest through her motherly love?',
+      options: ['Bhakta-vatsalya (allowing the Supreme Infinite to be bound by pure unalloyed love)', 'His terrible wrath against demons', 'His longing for royal prestige', 'His impersonal effulgence'],
+      correctOptionIndex: 0,
+      pointsCorrect: 15,
+      pointsWrong: -5,
+      explanation: 'The Damodara pastime demonstrates that although the Supreme Lord has neither beginning nor end, He permits Himself to be bound with the rope of unalloyed devotional love.',
+    },
+    {
+      id: 'r3-q5',
+      question: 'Which sacred commentary on Srimad-Bhagavatam by Srila Visvanatha Cakravarti Thakura greatly inspired Srila Prabhupada’s spiritual dedication to his Guru’s orders?',
+      options: ['Sarartha-darsini (commentary on BG 2.41 vyavasayatmika buddhir)', 'Govinda Bhasya', 'Chaitanya Bhagavata', 'Hari-bhakti-vilasa'],
+      correctOptionIndex: 0,
+      pointsCorrect: 15,
+      pointsWrong: -5,
+      explanation: 'Visvanatha Cakravarti Thakura’s commentary on Bhagavad-gita 2.41 stated that the instruction of the spiritual master must become one’s life and soul. Srila Prabhupada took this instruction to his heart.',
+    },
+    {
+      id: 'r3-q6',
+      question: 'During the historic 1971 visit to Moscow behind the Iron Curtain of the USSR, who was the young Russian student who met Srila Prabhupada and became his first Russian disciple?',
+      options: ['Ananta Shanti Das (Anatoli Pinyayev)', 'Harikesha Swami', 'Bhakti Vijnana Goswami', 'Yadubara Das'],
+      correctOptionIndex: 0,
+      pointsCorrect: 15,
+      pointsWrong: -5,
+      explanation: 'Anatoli Pinyayev met Srila Prabhupada secretly in Moscow in 1971 and received initiation as Ananta Shanti Das, igniting the underground Krishna conscious movement in Russia.',
+    },
+    {
+      id: 'r3-q7',
+      question: 'In which holy city did Lord Krishna slay the demonic King Kamsa and restore King Ugrasena to the royal throne?',
+      options: ['Mathura', 'Dwaraka', 'Hastinapura', 'Ayodhya'],
+      correctOptionIndex: 0,
+      pointsCorrect: 15,
+      pointsWrong: -5,
+      explanation: 'In the wrestling arena in Mathura, Lord Krishna dragged Kamsa from his elevated throne by the hair and liberated him.',
+    },
+    {
+      id: 'r3-q8',
+      question: 'What is the highest number of books distributed in a single month during the historic Prabhupada Book Marathon recorded in BBT history?',
+      options: ['Over 10 Million volumes worldwide', '50,000 copies', '100,000 copies', '500,000 copies'],
+      correctOptionIndex: 0,
+      pointsCorrect: 15,
+      pointsWrong: -5,
+      explanation: 'During the December marathons, BBT and book distributors have distributed tens of millions of transcendental volumes globally in a single annual campaign.',
+    },
+  ],
+  tieBreakerQuestions: [
+    {
+      id: 'tb-q1',
+      question: 'Fastest-Finger-First: In what year did Srila Prabhupada first introduce the Rathayatra festival of Lord Jagannatha to the Western world?',
+      options: ['1967 (San Francisco)', '1965 (Boston)', '1970 (London)', '1974 (Melbourne)'],
+      correctOptionIndex: 0,
+      explanation: 'The first Ratha Yatra in the Western world was celebrated in San Francisco on July 9, 1967, organized under Srila Prabhupada’s direction by Shyamasundar Das and Jayananda Prabhu.',
+    },
+    {
+      id: 'tb-q2',
+      question: 'Fastest-Finger-First: In Gokul Dham, what is the sacred hill that is non-different from the lotus body of Sri Harideva?',
+      options: ['Govardhana Hill', 'Venkata Hill', 'Chitrakoot Hill', 'Mainaka Mountain'],
+      correctOptionIndex: 0,
+      explanation: 'Giriraja Govardhana is celebrated throughout Vraja as the best of Lord Hari’s servants (haridasa-varya) and non-different from Krishna Himself.',
+    },
+    {
+      id: 'tb-q3',
+      question: 'Fastest-Finger-First: What was the title of the famous interview between Srila Prabhupada and John Lennon / George Harrison at Tittenhurst Park?',
+      options: ['Search for Liberation', 'The Science of Self-Realization', 'Chant and Be Happy', 'Life Comes From Life'],
+      correctOptionIndex: 2,
+      explanation: 'Published in the historic book "Chant and Be Happy: The Power of Mantra Meditation", featuring the famous discussions between Srila Prabhupada, John Lennon, and George Harrison.',
+    },
+  ],
+  round1State: {
+    currentQuestionIndex: 0,
+    targetSeat: 1,
+    isPassed: false,
+    passCount: 0,
+    isAnswerRevealed: false,
+    selectedOptionIndex: null,
+    status: 'DIRECT',
+  },
+  round2State: {
+    currentSeat: 1,
+    currentQuestionIndex: 0,
+    correctCount: 0,
+    passedCount: 0,
+    answers: [],
+    isCompleted: false,
+  },
+  round3State: {
+    currentQuestionIndex: 0,
+    isAnswerRevealed: false,
+  },
+  tieBreakerState: {
+    currentQuestionIndex: 0,
+    tiedParticipantIds: [],
+    submissions: {},
+    isCompleted: false,
+    winnerParticipantId: null,
+  },
+  buzzerState: {
+    isUnlocked: false,
+    buzzedParticipantId: null,
+    buzzedAt: null,
+    buzzHistory: [],
+    status: 'IDLE',
+    selectedOptionIndex: null,
+    selectedAt: null,
+  },
+  isPaused: false,
+  pausedMessage: 'Round paused by Quiz Master. Please stand by for instructions.',
+  lastScoreChange: null,
+  version: 1,
+  updatedAt: 0,
+};

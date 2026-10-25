@@ -1,0 +1,6 @@
+{
+  "name": "Viplava 2026: Srila Prabhupada Maha Quiz",
+  "description": "Interactive 6-player LAN/web spiritual quiz platform on Srila Prabhupada & Viplava 2026 at Gokul Mathura Dham with Direct & Pass, Rapid Fire, Buzzer Round, Fastest-Finger-First, and dedicated Host, Presenter, and Mobile views.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
