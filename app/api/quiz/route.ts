@@ -58,6 +58,10 @@ export async function POST(req: NextRequest) {
         result = quizStore.revealRound1Answer();
         break;
 
+      case 'reset_round1_question_attempt':
+        result = quizStore.resetRound1QuestionAttempt();
+        break;
+
       // Round 2
       case 'set_rapid_seat':
         result = quizStore.setRapidFireSeat(payload.seatNumber);
@@ -98,6 +102,10 @@ export async function POST(req: NextRequest) {
 
       case 'reveal_round3_answer':
         result = quizStore.revealRound3Answer();
+        break;
+
+      case 'reset_round3_question_attempt':
+        result = quizStore.resetRound3QuestionAttempt();
         break;
 
       // Tie Breaker

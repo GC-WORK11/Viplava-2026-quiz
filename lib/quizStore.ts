@@ -323,6 +323,25 @@ export const quizStore = {
     return quizStore.getState();
   },
 
+  resetRound1QuestionAttempt: () => {
+    const state = global.__GLOBAL_QUIZ_STATE__!;
+    const q = state.round1Questions[state.round1State.currentQuestionIndex];
+    const initialSeat = q ? q.assignedSeat : 1;
+
+    state.round1State.targetSeat = initialSeat;
+    state.round1State.isPassed = false;
+    state.round1State.passCount = 0;
+    state.round1State.isAnswerRevealed = false;
+    state.round1State.selectedOptionIndex = null;
+    state.round1State.status = 'DIRECT';
+    state.timer.secondsLeft = 30;
+    state.timer.initialSeconds = 30;
+    state.timer.isRunning = true;
+
+    broadcastChange();
+    return quizStore.getState();
+  },
+
   // ---------------- ROUND 2: RAPID FIRE ----------------
   setRapidFireSeat: (seatNumber: number) => {
     const state = global.__GLOBAL_QUIZ_STATE__!;
@@ -616,6 +635,26 @@ export const quizStore = {
         }
       }
     }
+
+    broadcastChange();
+    return quizStore.getState();
+  },
+
+  resetRound3QuestionAttempt: () => {
+    const state = global.__GLOBAL_QUIZ_STATE__!;
+    state.round3State.isAnswerRevealed = false;
+    state.buzzerState = {
+      isUnlocked: true,
+      buzzedParticipantId: null,
+      buzzedAt: null,
+      buzzHistory: [],
+      status: 'UNLOCKED',
+      selectedOptionIndex: null,
+      selectedAt: null,
+    };
+    state.timer.secondsLeft = 30;
+    state.timer.initialSeconds = 30;
+    state.timer.isRunning = true;
 
     broadcastChange();
     return quizStore.getState();

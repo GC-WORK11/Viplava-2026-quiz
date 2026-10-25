@@ -458,24 +458,32 @@ export function ParticipantMobileView({ state, executeAction, forcedSeat }: Part
           {phase === 'ROUND_1_ACTIVE' && (() => {
             const q = round1Questions[round1State.currentQuestionIndex];
             const isRevealed = round1State.isAnswerRevealed;
+            const activeSeatParticipant = participants.find((p) => p.seatNumber === round1State.targetSeat);
+            const activeSeatName = activeSeatParticipant?.claimedName || activeSeatParticipant?.spiritualName || `Seat #${round1State.targetSeat}`;
+
+            if (!isRound1MyTurn) {
+              return (
+                <div className="p-6 rounded-3xl bg-[#180f2d] border border-amber-500/30 text-center space-y-3 animate-fadeIn">
+                  <div className="text-3xl">👀</div>
+                  <div className="text-xs text-amber-400 font-bold uppercase tracking-wider">Active Turn:</div>
+                  <div className="text-lg font-bold font-cinzel text-amber-100">
+                    Seat #{round1State.targetSeat} ({activeSeatName})
+                  </div>
+                  <p className="text-xs text-amber-200/70 leading-relaxed">
+                    Question is currently active for candidate at Seat #{round1State.targetSeat}. Please look at the main projector display!
+                  </p>
+                </div>
+              );
+            }
 
             return (
-              <div className="space-y-3">
-                {isRound1MyTurn ? (
-                  <div className="p-3.5 rounded-2xl bg-gradient-to-r from-amber-600 to-yellow-500 text-black text-center shadow-lg font-bold">
-                    <div className="text-[11px] uppercase tracking-wider font-black">
-                      {round1State.isPassed ? '⚡ PASSED QUESTION FOR YOU (+5 PTS)' : '⭐ DIRECT QUESTION FOR YOU (+10 PTS)'}
-                    </div>
-                    <div className="text-xs mt-0.5">Select your answer or answer verbally:</div>
+              <div className="space-y-3 animate-fadeIn">
+                <div className="p-3.5 rounded-2xl bg-gradient-to-r from-amber-600 to-yellow-500 text-black text-center shadow-lg font-bold">
+                  <div className="text-[11px] uppercase tracking-wider font-black">
+                    {round1State.isPassed ? '⚡ PASSED QUESTION FOR YOU (+5 PTS)' : '⭐ DIRECT QUESTION FOR YOU (+10 PTS)'}
                   </div>
-                ) : (
-                  <div className="p-3 rounded-2xl bg-black/40 border border-amber-500/20 text-center">
-                    <div className="text-[11px] text-amber-400 font-bold uppercase">Active Seat:</div>
-                    <div className="text-sm font-bold text-amber-100">
-                      Seat {round1State.targetSeat} ({participants.find((p) => p.seatNumber === round1State.targetSeat)?.spiritualName})
-                    </div>
-                  </div>
-                )}
+                  <div className="text-xs mt-0.5">Select your answer option or state answer verbally:</div>
+                </div>
 
                 <div className="p-4 rounded-2xl bg-[#180f2d] border border-amber-500/30 space-y-3">
                   <div className="flex items-center justify-between text-xs text-amber-400/80 font-bold uppercase">
@@ -510,9 +518,10 @@ export function ParticipantMobileView({ state, executeAction, forcedSeat }: Part
                         return (
                           <button
                             key={i}
-                            onClick={() => isRound1MyTurn && handleSelectRound1Option(i)}
-                            disabled={!isRound1MyTurn || isRevealed}
-                            className={`w-full p-3 rounded-xl border text-left flex items-center justify-between text-xs transition-all ${optStyle}`}
+                            type="button"
+                            onClick={() => handleSelectRound1Option(i)}
+                            disabled={isRevealed}
+                            className={`w-full p-3 rounded-xl border text-left flex items-center justify-between text-xs transition-all active:scale-[0.98] ${optStyle}`}
                           >
                             <div className="flex items-center gap-2">
                               <span className="w-6 h-6 rounded bg-black/20 flex items-center justify-center font-bold">
@@ -521,26 +530,11 @@ export function ParticipantMobileView({ state, executeAction, forcedSeat }: Part
                               <span>{opt}</span>
                             </div>
                             {isSelected && !isRevealed && (
-                              <span className="text-[10px] uppercase font-black">Locked in ↗</span>
+                              <span className="text-[10px] uppercase font-black px-2 py-0.5 rounded bg-black text-amber-300">Selected ↗</span>
                             )}
                           </button>
                         );
                       })}
-                    </div>
-                  )}
-
-                  {/* Check Answer Button */}
-                  {isRound1MyTurn && !isRevealed && round1State.selectedOptionIndex !== null && (
-                    <div className="pt-2">
-                      <button
-                        type="button"
-                        onClick={handleCheckRound1Answer}
-                        disabled={isSubmittingAnswer}
-                        className="w-full py-3.5 px-4 rounded-xl bg-gradient-to-r from-emerald-600 via-teal-600 to-emerald-600 hover:from-emerald-500 hover:to-teal-500 text-white font-extrabold text-sm uppercase tracking-wider shadow-[0_0_20px_rgba(16,185,129,0.4)] flex items-center justify-center gap-2 transition-all active:scale-95 animate-pulse"
-                      >
-                        <CheckCircle className="w-5 h-5 text-white" />
-                        <span>{isSubmittingAnswer ? 'Checking Answer...' : '✓ Check Answer'}</span>
-                      </button>
                     </div>
                   )}
 
@@ -558,22 +552,30 @@ export function ParticipantMobileView({ state, executeAction, forcedSeat }: Part
           {phase === 'ROUND_2_ACTIVE' && (() => {
             const currentSet = round2Sets.find((s) => s.seatNumber === round2State.currentSeat);
             const currentQ = currentSet?.questions[round2State.currentQuestionIndex];
+            const activeSeatParticipant = participants.find((p) => p.seatNumber === round2State.currentSeat);
+            const activeSeatName = activeSeatParticipant?.claimedName || activeSeatParticipant?.spiritualName || `Seat #${round2State.currentSeat}`;
+
+            if (!isRound2MyTurn) {
+              return (
+                <div className="p-6 rounded-3xl bg-[#180f2d] border border-amber-500/30 text-center space-y-3 animate-fadeIn">
+                  <div className="text-3xl">⚡</div>
+                  <div className="text-xs text-amber-400 font-bold uppercase tracking-wider">Rapid Fire Blitz Active</div>
+                  <div className="text-lg font-bold font-cinzel text-amber-100">
+                    Seat #{round2State.currentSeat} ({activeSeatName})
+                  </div>
+                  <p className="text-xs text-amber-200/70 leading-relaxed">
+                    Candidate at Seat #{round2State.currentSeat} is answering their 10-question rapid set. Please watch the main screen!
+                  </p>
+                </div>
+              );
+            }
 
             return (
-              <div className="space-y-3">
-                {isRound2MyTurn ? (
-                  <div className="p-4 rounded-2xl bg-gradient-to-r from-amber-600 via-yellow-500 to-amber-600 text-black text-center shadow-lg font-black">
-                    <div className="text-xs uppercase tracking-widest">⚡ YOUR RAPID FIRE BLITZ!</div>
-                    <div className="text-sm">Q#{round2State.currentQuestionIndex + 1} / 10 • Clock: {timer.secondsLeft}s</div>
-                  </div>
-                ) : (
-                  <div className="p-3 rounded-2xl bg-black/40 border border-amber-500/20 text-center">
-                    <div className="text-xs text-amber-400 font-semibold uppercase">Rapid Fire Active:</div>
-                    <div className="text-sm font-bold text-amber-100">
-                      Seat {round2State.currentSeat} ({participants.find((p) => p.seatNumber === round2State.currentSeat)?.spiritualName})
-                    </div>
-                  </div>
-                )}
+              <div className="space-y-3 animate-fadeIn">
+                <div className="p-4 rounded-2xl bg-gradient-to-r from-amber-600 via-yellow-500 to-amber-600 text-black text-center shadow-lg font-black">
+                  <div className="text-xs uppercase tracking-widest">⚡ YOUR RAPID FIRE BLITZ!</div>
+                  <div className="text-sm">Q#{round2State.currentQuestionIndex + 1} / 10 • Clock: {timer.secondsLeft}s</div>
+                </div>
 
                 <div className="p-5 rounded-2xl bg-[#180f2d] border border-amber-500/30 text-center space-y-2">
                   <div className="text-xs text-amber-400/80 font-bold uppercase">
@@ -585,7 +587,7 @@ export function ParticipantMobileView({ state, executeAction, forcedSeat }: Part
             );
           })()}
 
-          {/* ROUND 3: BUZZER ROUND (USER REQUEST: OPTION SELECTION & REVEAL) */}
+          {/* ROUND 3: BUZZER ROUND */}
           {phase === 'ROUND_3_ACTIVE' && (() => {
             const q = round3Questions[round3State.currentQuestionIndex];
             const isRevealed = round3State.isAnswerRevealed;
@@ -634,14 +636,14 @@ export function ParticipantMobileView({ state, executeAction, forcedSeat }: Part
                       <div className="p-3 rounded-2xl bg-gradient-to-r from-amber-500 to-yellow-400 text-black text-center font-black shadow-lg">
                         <div className="text-xs uppercase tracking-wider">🎉 YOU BUZZED IN FIRST!</div>
                         <div className="text-xs font-semibold mt-0.5">
-                          Tap your chosen option below (it will appear on the Projector):
+                          Tap your chosen option below:
                         </div>
                       </div>
                     ) : (
                       <div className="p-3 rounded-2xl bg-black/50 border border-amber-500/30 text-center">
                         <div className="text-xs text-amber-400 font-bold uppercase">Buzzed In:</div>
                         <div className="text-sm font-bold text-amber-100">
-                          Seat {buzzerState.buzzedParticipantId?.replace('p', '')} is choosing their answer...
+                          Seat #{buzzerState.buzzedParticipantId?.replace('p', '')} is choosing their answer...
                         </div>
                       </div>
                     )}
@@ -703,21 +705,6 @@ export function ParticipantMobileView({ state, executeAction, forcedSeat }: Part
                         );
                       })}
                     </div>
-
-                    {/* Check Answer Button for Round 3 */}
-                    {didIBuzzFirst && buzzerState.selectedOptionIndex !== null && !isRevealed && (
-                      <div className="pt-2">
-                        <button
-                          type="button"
-                          onClick={handleCheckRound3Answer}
-                          disabled={isSubmittingAnswer}
-                          className="w-full py-3.5 px-4 rounded-xl bg-gradient-to-r from-emerald-600 via-teal-600 to-emerald-600 hover:from-emerald-500 hover:to-teal-500 text-white font-extrabold text-sm uppercase tracking-wider shadow-[0_0_20px_rgba(16,185,129,0.4)] flex items-center justify-center gap-2 transition-all active:scale-95 animate-pulse"
-                        >
-                          <CheckCircle className="w-5 h-5 text-white" />
-                          <span>{isSubmittingAnswer ? 'Checking Answer...' : '✓ Check Answer (+15 / -5)'}</span>
-                        </button>
-                      </div>
-                    )}
                   </div>
                 )}
 

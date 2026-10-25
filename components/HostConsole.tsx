@@ -191,6 +191,19 @@ export function HostConsole({ state, executeAction }: HostConsoleProps) {
             </button>
 
             <button
+              onClick={() => {
+                if (confirm('Are you sure you want to reset all scores to 0 and return the quiz to Lobby?')) {
+                  executeAction('reset_quiz');
+                }
+              }}
+              className="px-3 py-1.5 rounded-xl bg-rose-950/80 hover:bg-rose-900 border border-rose-500/50 text-rose-200 text-xs font-bold flex items-center gap-1.5 transition-colors shadow-sm"
+              title="Reset all scores to 0 and return to Lobby"
+            >
+              <RotateCcw className="w-3.5 h-3.5 text-rose-400" />
+              <span>Reset Quiz</span>
+            </button>
+
+            <button
               onClick={() => setShowScoreModal(true)}
               className="px-3 py-1.5 rounded-xl bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/40 text-amber-200 text-xs font-bold flex items-center gap-1.5 transition-colors"
             >
@@ -676,6 +689,19 @@ export function HostConsole({ state, executeAction }: HostConsoleProps) {
                 <span>{round1State.isAnswerRevealed ? 'Answer Revealed' : 'Reveal Answer'}</span>
               </button>
 
+              {/* Reset / Retry Question Attempt */}
+              <button
+                type="button"
+                onClick={() => {
+                  executeAction('reset_round1_question_attempt');
+                }}
+                className="p-4 rounded-2xl bg-rose-950/80 hover:bg-rose-900 border border-rose-500/50 text-rose-200 font-bold text-sm sm:text-base shadow-lg flex items-center justify-center gap-2 transition-all active:scale-95"
+                title="Reset this question back to original seat attempt with 30s timer"
+              >
+                <RotateCcw className="w-5 h-5 text-rose-400" />
+                <span>Reset Question Attempt</span>
+              </button>
+
               {/* 3. Next Question / Finish Round */}
               <button
                 type="button"
@@ -1132,16 +1158,29 @@ export function HostConsole({ state, executeAction }: HostConsoleProps) {
 
             {/* Navigation buttons */}
             <div className="flex items-center justify-between gap-3 pt-2">
-              <button
-                onClick={() => {
-                  executeAction('reveal_round3_answer');
-                  soundManager.playBell();
-                }}
-                className="px-4 py-2 rounded-xl bg-purple-950/80 hover:bg-purple-900 text-purple-200 border border-purple-500/40 text-xs font-bold flex items-center gap-1.5"
-              >
-                <Eye className="w-4 h-4 text-purple-400" />
-                <span>Reveal Answer</span>
-              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => {
+                    executeAction('reveal_round3_answer');
+                    soundManager.playBell();
+                  }}
+                  className="px-4 py-2 rounded-xl bg-purple-950/80 hover:bg-purple-900 text-purple-200 border border-purple-500/40 text-xs font-bold flex items-center gap-1.5"
+                >
+                  <Eye className="w-4 h-4 text-purple-400" />
+                  <span>Reveal Answer</span>
+                </button>
+
+                <button
+                  onClick={() => {
+                    executeAction('reset_round3_question_attempt');
+                  }}
+                  className="px-4 py-2 rounded-xl bg-rose-950/80 hover:bg-rose-900 text-rose-200 border border-rose-500/40 text-xs font-bold flex items-center gap-1.5"
+                  title="Reset buzzer and option selection for this question"
+                >
+                  <RotateCcw className="w-4 h-4 text-rose-400" />
+                  <span>Reset Buzzer / Re-ask</span>
+                </button>
+              </div>
 
               <button
                 onClick={() => {
@@ -1251,11 +1290,14 @@ export function HostConsole({ state, executeAction }: HostConsoleProps) {
                   onChange={(e) => setSelectedSeatScoreEdit(e.target.value)}
                   className="w-full mt-1 p-2 rounded-lg bg-black/50 border border-amber-500/30 text-amber-200 text-sm"
                 >
-                  {participants.map((p) => (
-                    <option key={p.id} value={p.id}>
-                      Seat {p.seatNumber}: {p.name} ({p.spiritualName}) — {p.totalScore} pts
-                    </option>
-                  ))}
+                  {participants.map((p) => {
+                    const nameStr = p.claimedName || p.spiritualName || p.name;
+                    return (
+                      <option key={p.id} value={p.id}>
+                        Seat {p.seatNumber}: {nameStr} — {p.totalScore} pts
+                      </option>
+                    );
+                  })}
                 </select>
               </div>
 

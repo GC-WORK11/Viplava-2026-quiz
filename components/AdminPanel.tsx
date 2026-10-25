@@ -61,6 +61,20 @@ export function AdminPanel({ state, executeAction }: AdminPanelProps) {
   const [round3Questions, setRound3Questions] = useState<BuzzerQuestion[]>(state.round3Questions);
   const [tieBreakerQuestions, setTieBreakerQuestions] = useState<TieBreakerQuestion[]>(state.tieBreakerQuestions || []);
 
+  // Sync local editable state when global quiz state version updates
+  const [prevVersion, setPrevVersion] = useState(state.version);
+  if (state.version !== prevVersion) {
+    setPrevVersion(state.version);
+    setRules(state.rules);
+    setParticipants(state.participants);
+    setRound1Questions(state.round1Questions);
+    setRound2Sets(state.round2Sets);
+    setRound3Questions(state.round3Questions);
+    if (state.tieBreakerQuestions) {
+      setTieBreakerQuestions(state.tieBreakerQuestions);
+    }
+  }
+
   // New question form state
   const [showAddR1, setShowAddR1] = useState(false);
   const [newR1, setNewR1] = useState<QuestionRound1>({
