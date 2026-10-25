@@ -46,6 +46,10 @@ export async function POST(req: NextRequest) {
         result = quizStore.selectRound1Option(payload.optionIndex);
         break;
 
+      case 'check_round1_answer':
+        result = quizStore.checkRound1Answer(payload?.optionIndex);
+        break;
+
       case 'mark_round1_answer':
         result = quizStore.markRound1Answer(payload.isCorrect);
         break;
@@ -82,6 +86,10 @@ export async function POST(req: NextRequest) {
 
       case 'select_buzzer_option':
         result = quizStore.selectBuzzerOption(payload.participantId, payload.optionIndex);
+        break;
+
+      case 'check_round3_answer':
+        result = quizStore.checkRound3Answer(payload?.optionIndex);
         break;
 
       case 'mark_buzzer_answer':
@@ -149,11 +157,19 @@ export async function POST(req: NextRequest) {
 
       // Management & Admin
       case 'claim_seat':
-        result = quizStore.claimSeat(payload.seatNumber, payload.name || '');
+        result = quizStore.claimSeat(payload.seatNumber, payload.name || '', payload.participantId);
         break;
 
       case 'release_seat':
         result = quizStore.releaseSeat(payload.seatNumber);
+        break;
+
+      case 'set_custom_host_url':
+        result = quizStore.setCustomHostUrl(payload.url);
+        break;
+
+      case 'reset_check_ins':
+        result = quizStore.resetCheckIns();
         break;
 
       case 'update_participant':

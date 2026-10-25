@@ -93,7 +93,7 @@ export function HeaderNav({
               VIPLAVA 2026
             </span>
             <span className="text-xs text-amber-200/60 ml-2 font-medium">
-              Prabhupada Quiz
+              Quiz
             </span>
           </div>
         </div>
@@ -228,20 +228,20 @@ export function HeaderNav({
           <button
             onClick={onOpenQR}
             className="p-1.5 rounded-lg bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/40 text-amber-300 transition-colors"
-            title="Connect Mobile Phones on Offline Wi-Fi"
+            title="Connect Mobile Phones via Wi-Fi"
           >
             <QrCode className="w-4 h-4" />
           </button>
 
-          {/* Lock / Unlock (108) */}
+          {/* Lock / Unlock */}
           {!isUnlocked ? (
             <button
               onClick={() => onOpenAuth('host')}
               className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/40 text-amber-300 text-xs font-bold"
-              title="Unlock Host Controls with Passcode 108"
+              title="Unlock Host Controls"
             >
               <Lock className="w-3.5 h-3.5" />
-              <span>108</span>
+              <span>Host</span>
             </button>
           ) : (
             <button
@@ -253,10 +253,10 @@ export function HeaderNav({
             </button>
           )}
 
-          {/* 100% Offline Badge */}
+          {/* Local Sync Badge */}
           <div className="hidden xl:flex items-center gap-1 px-2 py-1 rounded-lg bg-emerald-950/40 border border-emerald-500/30 text-[10px] text-emerald-300 font-bold uppercase">
             <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-            <span>Offline LAN</span>
+            <span>Local Sync</span>
           </div>
         </div>
       </div>

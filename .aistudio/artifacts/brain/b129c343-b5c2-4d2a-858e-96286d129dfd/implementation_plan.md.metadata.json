@@ -1,6 +1,6 @@
 {
-  "summary":  "Complete operational blueprint and feature implementation plan for conducting the 6-player Viplava 2026 Quiz. Covers QR scanning, seat claiming with custom names, real-time live projector check-in roster, and the interactive in-console Quiz Master Runbook.",
-  "updatedAt":  "2026-10-23T03:01:19.101099430Z",
+  "summary":  "Implementation plan for removing host/admin passcode displays from UI elements.",
+  "updatedAt":  "2026-10-25T06:12:42.270230692Z",
   "requestFeedback":  true,
   "userFacing":  true
 }

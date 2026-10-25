@@ -97,7 +97,7 @@ export function AuthProtectionModal({
         onClose();
       }, 500);
     } else {
-      setErrorMsg('Incorrect passcode. Please enter the sacred number (108).');
+      setErrorMsg('Incorrect passcode. Please try again.');
     }
   };
 
@@ -134,7 +134,7 @@ export function AuthProtectionModal({
             <input
               type="password"
               autoFocus
-              placeholder="Enter passcode (108)"
+              placeholder="Enter passcode"
               value={passcode}
               onChange={(e) => {
                 setPasscode(e.target.value);

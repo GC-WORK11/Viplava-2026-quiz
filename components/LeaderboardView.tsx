@@ -86,11 +86,18 @@ export function LeaderboardView({ state }: LeaderboardViewProps) {
               <div className="flex items-center gap-1.5 text-xs font-black uppercase tracking-widest text-black/80">
                 <Crown className="w-4 h-4 text-black" /> Leading Contestant
               </div>
-              <h3 className="text-xl sm:text-2xl font-black font-cinzel text-black">
-                Seat {leader.seatNumber}: {leader.name} ({leader.spiritualName})
+              <h3 className="text-xl sm:text-2xl font-black font-cinzel text-black flex items-center gap-2">
+                <span className="px-2 py-0.5 rounded-lg bg-black/15 text-black font-mono text-sm font-extrabold border border-black/20">
+                  Seat {leader.seatNumber}
+                </span>
+                <span>
+                  {leader.isClaimed
+                    ? (leader.claimedName || leader.spiritualName || leader.name)
+                    : 'Waiting to Join'}
+                </span>
               </h3>
               <div className="text-xs font-semibold text-black/80">
-                R1: {leader.scores.round1} pts • R2: {leader.scores.round2} pts • R3: {leader.scores.round3} pts
+                {leader.isClaimed && leader.spiritualName ? `${leader.spiritualName} • ` : ''}R1: {leader.scores.round1} pts • R2: {leader.scores.round2} pts • R3: {leader.scores.round3} pts
               </div>
             </div>
           </div>
@@ -150,10 +157,19 @@ export function LeaderboardView({ state }: LeaderboardViewProps) {
                   </div>
                   <div className="text-3xl">{p.avatar}</div>
                   <div>
-                    <div className="text-sm font-bold text-amber-100">
-                      Seat {p.seatNumber}: {p.name}
+                    <div className="flex items-center gap-2">
+                      <span className="px-2 py-0.5 rounded-md bg-amber-500/20 text-amber-300 font-mono text-xs font-bold border border-amber-500/30">
+                        Seat {p.seatNumber}
+                      </span>
+                      <span className="text-sm font-bold text-amber-100">
+                        {p.isClaimed
+                          ? (p.claimedName || p.spiritualName || p.name)
+                          : 'Waiting to Join'}
+                      </span>
                     </div>
-                    <div className="text-xs text-amber-300/70">{p.spiritualName}</div>
+                    <div className="text-xs text-amber-300/70 mt-0.5">
+                      {p.isClaimed && p.spiritualName ? p.spiritualName : 'Unclaimed'}
+                    </div>
                   </div>
                 </div>
 

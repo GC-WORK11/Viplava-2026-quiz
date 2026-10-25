@@ -77,6 +77,42 @@ function QuizAppContent() {
     );
   }
 
+  // Dedicated Participant View: Strictly no links to other pages, only quiz attempt things
+  if (currentView === 'participant') {
+    return (
+      <div className="min-h-screen bg-[#0b0713] text-amber-50 flex flex-col selection:bg-amber-500 selection:text-black">
+        {/* Minimal focused contestant header with no other page links */}
+        <header className="px-4 py-2.5 bg-[#140b24]/90 border-b border-amber-500/20 flex items-center justify-between sticky top-0 z-30">
+          <div className="flex items-center gap-2.5">
+            <span className="text-2xl">🦚</span>
+            <div>
+              <div className="text-xs font-black font-cinzel text-amber-300">VIPLAVA 2026 • CONTESTANT PORTAL</div>
+              <div className="text-[10px] text-amber-200/60">Stage Live Quiz Attempt Interface</div>
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-bold border ${
+              isConnected
+                ? 'bg-emerald-950/80 text-emerald-300 border-emerald-500/30'
+                : 'bg-rose-950/80 text-rose-300 border-rose-500/30'
+            }`}>
+              <span className={`w-1.5 h-1.5 rounded-full ${isConnected ? 'bg-emerald-400 animate-pulse' : 'bg-rose-400'}`} />
+              {isConnected ? 'Connected' : 'Connecting...'}
+            </span>
+          </div>
+        </header>
+
+        <main className="flex-1">
+          <ParticipantMobileView
+            state={state}
+            executeAction={executeAction}
+            forcedSeat={forcedSeat}
+          />
+        </main>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen flex flex-col bg-[#0b0713] text-amber-50 selection:bg-amber-500 selection:text-black">
       {/* Top Header Navigation */}
@@ -103,14 +139,6 @@ function QuizAppContent() {
           <PresenterScreen state={state} isStandalone={false} />
         )}
 
-        {currentView === 'participant' && (
-          <ParticipantMobileView
-            state={state}
-            executeAction={executeAction}
-            forcedSeat={forcedSeat}
-          />
-        )}
-
         {currentView === 'leaderboard' && (
           <LeaderboardView state={state} />
         )}
@@ -130,6 +158,8 @@ function QuizAppContent() {
         onClose={() => setIsQRModalOpen(false)}
         participants={state.participants}
         onSelectSeat={handleSeatSelectedFromModal}
+        customHostUrl={state.customHostUrl}
+        detectedNetworkIp={state.detectedNetworkIp}
       />
 
       {/* Passcode 108 Authentication Modal */}

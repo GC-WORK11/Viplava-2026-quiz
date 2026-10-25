@@ -96,7 +96,7 @@ export interface Round1ActiveState {
   passCount: number; // 0 = original, 1 = passed once (max 1 pass)
   isAnswerRevealed: boolean;
   selectedOptionIndex: number | null; // Selected option (0 to 3) if question has options
-  status: 'WAITING' | 'DIRECT' | 'PASSED' | 'REVEALED';
+  status: 'WAITING' | 'DIRECT' | 'PASSED' | 'REVEALED' | 'WRONG';
 }
 
 export interface Round2ActiveState {
@@ -166,6 +166,10 @@ export interface QuizState {
     description: string;
     timestamp: number;
   } | null;
+
+  // Host URL and Network IP for QR Code scanning
+  customHostUrl?: string;
+  detectedNetworkIp?: string;
 
   version: number;
   updatedAt: number;

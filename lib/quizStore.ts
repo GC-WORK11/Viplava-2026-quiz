@@ -1,18 +1,91 @@
+import os from 'os';
 import { QuizState, QuizPhase, Participant, QuestionRound1, RapidFireSet, BuzzerQuestion, TieBreakerQuestion, QuizRules } from './types';
 import { INITIAL_QUIZ_STATE } from './defaultData';
+
+function detectLocalNetworkIp(): string | null {
+  try {
+    const interfaces = os.networkInterfaces();
+    for (const name of Object.keys(interfaces)) {
+      for (const net of interfaces[name] || []) {
+        if (net.family === 'IPv4' && !net.internal && net.address) {
+          if (!net.address.startsWith('127.')) {
+            return net.address;
+          }
+        }
+      }
+    }
+  } catch {}
+  return null;
+}
 
 // Global singleton state in Node server environment
 declare global {
   var __GLOBAL_QUIZ_STATE__: QuizState | undefined;
   var __QUIZ_LISTENERS__: Set<(state: QuizState) => void> | undefined;
+  var __TIMER_INTERVAL__: NodeJS.Timeout | undefined;
 }
 
 if (!global.__GLOBAL_QUIZ_STATE__) {
-  global.__GLOBAL_QUIZ_STATE__ = JSON.parse(JSON.stringify(INITIAL_QUIZ_STATE));
+  const initialState: QuizState = JSON.parse(JSON.stringify(INITIAL_QUIZ_STATE));
+  const detected = detectLocalNetworkIp();
+  if (detected) {
+    initialState.detectedNetworkIp = detected;
+  }
+  global.__GLOBAL_QUIZ_STATE__ = initialState;
+} else {
+  // Ensure default uncheck state
+  const detected = detectLocalNetworkIp();
+  if (detected && global.__GLOBAL_QUIZ_STATE__ && !global.__GLOBAL_QUIZ_STATE__.detectedNetworkIp) {
+    global.__GLOBAL_QUIZ_STATE__.detectedNetworkIp = detected;
+  }
 }
 
 if (!global.__QUIZ_LISTENERS__) {
   global.__QUIZ_LISTENERS__ = new Set();
+}
+
+// Background timer ticker - counts down automatically when timer is running and not paused
+if (!global.__TIMER_INTERVAL__) {
+  global.__TIMER_INTERVAL__ = setInterval(() => {
+    const state = global.__GLOBAL_QUIZ_STATE__;
+    if (state && state.timer.isRunning && !state.isPaused) {
+      if (state.timer.secondsLeft > 0) {
+        state.timer.secondsLeft -= 1;
+        state.timer.lastUpdated = Date.now();
+
+        if (state.timer.secondsLeft === 0) {
+          state.timer.isRunning = false;
+
+          // Auto-timeout transitions
+          if (state.phase === 'ROUND_1_ACTIVE') {
+            if (!state.round1State.isPassed && state.round1State.passCount === 0) {
+              // Direct question timed out -> auto pass to next seat
+              const currentSeat = state.round1State.targetSeat;
+              const nextSeat = (currentSeat % 6) + 1;
+              state.round1State.targetSeat = nextSeat;
+              state.round1State.isPassed = true;
+              state.round1State.passCount = 1;
+              state.round1State.status = 'PASSED';
+              state.round1State.selectedOptionIndex = null;
+              state.timer.secondsLeft = 15;
+              state.timer.initialSeconds = 15;
+              state.timer.isRunning = true;
+            } else {
+              // Pass question timed out -> reveal answer
+              state.round1State.isAnswerRevealed = true;
+              state.round1State.status = 'REVEALED';
+            }
+          } else if (state.phase === 'ROUND_2_ACTIVE') {
+            state.round2State.isCompleted = true;
+          } else if (state.phase === 'ROUND_3_ACTIVE') {
+            state.buzzerState.isUnlocked = false;
+          }
+        }
+
+        broadcastChange();
+      }
+    }
+  }, 1000);
 }
 
 function broadcastChange() {
@@ -46,22 +119,24 @@ export const quizStore = {
     const state = global.__GLOBAL_QUIZ_STATE__!;
     state.phase = phase;
 
-    // Reset timer according to phase defaults
+    // Reset timer according to phase defaults - automatically start on active rounds
     if (phase === 'ROUND_1_ACTIVE') {
       state.timer.initialSeconds = 30;
       state.timer.secondsLeft = 30;
-      state.timer.isRunning = false;
+      state.timer.isRunning = true;
     } else if (phase === 'ROUND_2_ACTIVE') {
       state.timer.initialSeconds = 60;
       state.timer.secondsLeft = 60;
-      state.timer.isRunning = false;
+      state.timer.isRunning = true;
     } else if (phase === 'ROUND_3_ACTIVE') {
       state.timer.initialSeconds = 30;
       state.timer.secondsLeft = 30;
-      state.timer.isRunning = false;
-      state.buzzerState.isUnlocked = false;
+      state.timer.isRunning = true;
+      state.buzzerState.isUnlocked = true;
       state.buzzerState.buzzedParticipantId = null;
-      state.buzzerState.status = 'IDLE';
+      state.buzzerState.status = 'UNLOCKED';
+    } else {
+      state.timer.isRunning = false;
     }
 
     broadcastChange();
@@ -94,7 +169,8 @@ export const quizStore = {
     };
     state.timer.secondsLeft = 30;
     state.timer.initialSeconds = 30;
-    state.timer.isRunning = false;
+    // Auto-start clock timer automatically when question appears
+    state.timer.isRunning = true;
 
     broadcastChange();
     return quizStore.getState();
@@ -129,6 +205,71 @@ export const quizStore = {
     return quizStore.getState();
   },
 
+  checkRound1Answer: (optionIndex?: number) => {
+    const state = global.__GLOBAL_QUIZ_STATE__!;
+    const qIndex = state.round1State.currentQuestionIndex;
+    const q = state.round1Questions[qIndex];
+    if (!q) return { success: false, state: quizStore.getState() };
+
+    const selectedIdx = optionIndex !== undefined ? optionIndex : state.round1State.selectedOptionIndex;
+    if (selectedIdx === null || selectedIdx === undefined) {
+      return { success: false, state: quizStore.getState() };
+    }
+    state.round1State.selectedOptionIndex = selectedIdx;
+
+    let isCorrect = false;
+    if (q.options && q.options[selectedIdx]) {
+      const selected = q.options[selectedIdx].trim().toLowerCase();
+      const correct = q.correctAnswer.trim().toLowerCase();
+      isCorrect = selected === correct || selected.includes(correct) || correct.includes(selected);
+    } else {
+      isCorrect = true;
+    }
+
+    const currentSeat = state.round1State.targetSeat;
+    const participant = state.participants.find((p) => p.seatNumber === currentSeat);
+
+    if (isCorrect) {
+      const points = state.round1State.isPassed ? 5 : 10;
+      if (participant) {
+        participant.scores.round1 += points;
+        participant.totalScore += points;
+        state.lastScoreChange = {
+          participantId: participant.id,
+          round: 'round1',
+          delta: points,
+          description: state.round1State.isPassed ? `Round 1 Pass Correct (+${points})` : `Round 1 Direct Correct (+${points})`,
+          timestamp: Date.now(),
+        };
+      }
+      state.round1State.isAnswerRevealed = true;
+      state.round1State.status = 'REVEALED';
+      state.timer.isRunning = false;
+    } else {
+      // If wrong answer, make it like wrong and transfer to next if direct
+      if (state.round1State.passCount === 0 && !state.round1State.isPassed) {
+        const nextSeat = (currentSeat % 6) + 1;
+        state.round1State.targetSeat = nextSeat;
+        state.round1State.isPassed = true;
+        state.round1State.passCount = 1;
+        state.round1State.status = 'PASSED';
+        state.round1State.selectedOptionIndex = null;
+        state.round1State.isAnswerRevealed = false;
+        state.timer.secondsLeft = 15;
+        state.timer.initialSeconds = 15;
+        state.timer.isRunning = true;
+      } else {
+        // Passed and wrong: mark as wrong, do not reveal so host can click Reveal Answer
+        state.round1State.isAnswerRevealed = false;
+        state.round1State.status = 'WRONG';
+        state.timer.isRunning = false;
+      }
+    }
+
+    broadcastChange();
+    return { success: true, isCorrect, state: quizStore.getState() };
+  },
+
   markRound1Answer: (isCorrect: boolean) => {
     const state = global.__GLOBAL_QUIZ_STATE__!;
     const currentSeat = state.round1State.targetSeat;
@@ -150,10 +291,21 @@ export const quizStore = {
         timestamp: Date.now(),
       };
     } else if (!isCorrect) {
-      // If direct missed and hasn't passed yet, prompt host to pass or reveal
-      if (state.round1State.passCount >= 1) {
-        state.round1State.isAnswerRevealed = true;
-        state.round1State.status = 'REVEALED';
+      // If direct missed, make it like wrong and transfer to next
+      if (state.round1State.passCount === 0 && !state.round1State.isPassed) {
+        const nextSeat = (currentSeat % 6) + 1;
+        state.round1State.targetSeat = nextSeat;
+        state.round1State.isPassed = true;
+        state.round1State.passCount = 1;
+        state.round1State.status = 'PASSED';
+        state.round1State.selectedOptionIndex = null;
+        state.round1State.isAnswerRevealed = false;
+        state.timer.secondsLeft = 15;
+        state.timer.initialSeconds = 15;
+        state.timer.isRunning = true;
+      } else {
+        state.round1State.isAnswerRevealed = false;
+        state.round1State.status = 'WRONG';
         state.timer.isRunning = false;
       }
     }
@@ -184,7 +336,8 @@ export const quizStore = {
     };
     state.timer.secondsLeft = 60;
     state.timer.initialSeconds = 60;
-    state.timer.isRunning = false;
+    // Auto-start clock timer automatically when rapid fire begins
+    state.timer.isRunning = true;
 
     broadcastChange();
     return quizStore.getState();
@@ -232,21 +385,79 @@ export const quizStore = {
     state.round3State.currentQuestionIndex = questionIndex;
     state.round3State.isAnswerRevealed = false;
 
+    // Automatically unlock buzzer and start timer when question appears
     state.buzzerState = {
-      isUnlocked: false,
+      isUnlocked: true,
       buzzedParticipantId: null,
       buzzedAt: null,
       buzzHistory: [],
-      status: 'IDLE',
+      status: 'UNLOCKED',
       selectedOptionIndex: null,
       selectedAt: null,
     };
     state.timer.secondsLeft = 30;
     state.timer.initialSeconds = 30;
-    state.timer.isRunning = false;
+    state.timer.isRunning = true;
 
     broadcastChange();
     return quizStore.getState();
+  },
+
+  checkRound3Answer: (optionIndex?: number) => {
+    const state = global.__GLOBAL_QUIZ_STATE__!;
+    const qIndex = state.round3State.currentQuestionIndex;
+    const q = state.round3Questions[qIndex];
+    if (!q) return { success: false, state: quizStore.getState() };
+
+    const buzzedId = state.buzzerState.buzzedParticipantId;
+    if (!buzzedId) return { success: false, state: quizStore.getState() };
+
+    const selectedIdx = optionIndex !== undefined ? optionIndex : state.buzzerState.selectedOptionIndex;
+    if (selectedIdx === null || selectedIdx === undefined) {
+      return { success: false, state: quizStore.getState() };
+    }
+    state.buzzerState.selectedOptionIndex = selectedIdx;
+
+    const isCorrect = selectedIdx === q.correctOptionIndex;
+    const participant = state.participants.find((p) => p.id === buzzedId);
+
+    if (isCorrect) {
+      if (participant) {
+        participant.scores.round3 += 15;
+        participant.totalScore += 15;
+        state.lastScoreChange = {
+          participantId: participant.id,
+          round: 'round3',
+          delta: 15,
+          description: 'Buzzer Round Correct (+15)',
+          timestamp: Date.now(),
+        };
+      }
+      state.round3State.isAnswerRevealed = true;
+      state.buzzerState.status = 'ANSWERED';
+      state.timer.isRunning = false;
+    } else {
+      if (participant) {
+        participant.scores.round3 -= 5;
+        participant.totalScore -= 5;
+        state.lastScoreChange = {
+          participantId: participant.id,
+          round: 'round3',
+          delta: -5,
+          description: 'Buzzer Round Penalty (-5)',
+          timestamp: Date.now(),
+        };
+      }
+      // Wrong answer -> transfer chance back to other contestants by unlocking buzzer!
+      state.buzzerState.buzzedParticipantId = null;
+      state.buzzerState.selectedOptionIndex = null;
+      state.buzzerState.isUnlocked = true;
+      state.buzzerState.status = 'UNLOCKED';
+      state.timer.isRunning = true;
+    }
+
+    broadcastChange();
+    return { success: true, isCorrect, state: quizStore.getState() };
   },
 
   unlockBuzzer: () => {
@@ -482,10 +693,13 @@ export const quizStore = {
     return quizStore.getState();
   },
 
-  claimSeat: (seatNumber: number, customName: string) => {
+  claimSeat: (seatNumber: number, customName: string, participantId?: string) => {
     const state = global.__GLOBAL_QUIZ_STATE__!;
     const p = state.participants.find((item) => item.seatNumber === seatNumber);
     if (p) {
+      if (p.isClaimed && participantId && p.id !== participantId) {
+        return { success: false, reason: 'Seat is already claimed by another participant', state: quizStore.getState() };
+      }
       const trimmed = customName.trim();
       p.isClaimed = true;
       p.claimedName = trimmed || p.spiritualName;
@@ -495,7 +709,7 @@ export const quizStore = {
       p.lastActive = Date.now();
     }
     broadcastChange();
-    return quizStore.getState();
+    return { success: true, state: quizStore.getState() };
   },
 
   releaseSeat: (seatNumber: number) => {
@@ -504,7 +718,26 @@ export const quizStore = {
     if (p) {
       p.isClaimed = false;
       p.connected = false;
+      p.claimedName = '';
     }
+    broadcastChange();
+    return quizStore.getState();
+  },
+
+  setCustomHostUrl: (url: string) => {
+    const state = global.__GLOBAL_QUIZ_STATE__!;
+    state.customHostUrl = url.trim();
+    broadcastChange();
+    return quizStore.getState();
+  },
+
+  resetCheckIns: () => {
+    const state = global.__GLOBAL_QUIZ_STATE__!;
+    state.participants.forEach((p) => {
+      p.isClaimed = false;
+      p.connected = false;
+      p.claimedName = '';
+    });
     broadcastChange();
     return quizStore.getState();
   },

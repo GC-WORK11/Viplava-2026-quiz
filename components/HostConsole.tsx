@@ -22,10 +22,16 @@ import {
   BookOpen,
   QrCode,
   Users,
+  Wifi,
 } from 'lucide-react';
 import { QuizState, QuizPhase } from '@/lib/types';
 import { soundManager } from '@/lib/soundEffects';
 import { HostRunbookModal } from '@/components/HostRunbookModal';
+import { resolveParticipantJoinUrl } from '@/lib/networkHelper';
+
+const subscribeOrigin = () => () => {};
+const getOriginSnapshot = () => (typeof window !== 'undefined' ? window.location.origin : '');
+const getOriginServerSnapshot = () => '';
 
 interface HostConsoleProps {
   state: QuizState;
@@ -54,6 +60,14 @@ export function HostConsole({ state, executeAction }: HostConsoleProps) {
   const [selectedRoundEdit, setSelectedRoundEdit] = useState<'round1' | 'round2' | 'round3' | 'tieBreaker'>('round1');
   const [showScoreModal, setShowScoreModal] = useState(false);
   const [showRunbookModal, setShowRunbookModal] = useState(false);
+  const [networkIpInput, setNetworkIpInput] = useState<string>(state.customHostUrl || state.detectedNetworkIp || '');
+
+  const currentOrigin = React.useSyncExternalStore(subscribeOrigin, getOriginSnapshot, getOriginServerSnapshot);
+  const resolvedJoinUrl = resolveParticipantJoinUrl(
+    currentOrigin,
+    state.customHostUrl,
+    state.detectedNetworkIp
+  );
 
   const {
     phase,
@@ -367,7 +381,7 @@ export function HostConsole({ state, executeAction }: HostConsoleProps) {
 
       {/* 1. LOBBY CONTROLS: LIVE CHECK-IN ROSTER */}
       {phase === 'LOBBY' && (() => {
-        const claimedCount = participants.filter((p) => p.isClaimed || p.connected).length;
+        const claimedCount = participants.filter((p) => Boolean(p.isClaimed)).length;
         const allReady = claimedCount >= 6;
 
         return (
@@ -382,10 +396,50 @@ export function HostConsole({ state, executeAction }: HostConsoleProps) {
               </p>
             </div>
 
+            {/* Wi-Fi Direct Network IP / QR URL Configuration Bar */}
+            <div className="p-4 rounded-2xl bg-black/50 border border-amber-500/30 flex flex-col md:flex-row items-center justify-between gap-3 text-left">
+              <div className="flex items-center gap-2.5">
+                <div className="p-2 rounded-xl bg-amber-500/20 text-amber-400 border border-amber-500/30 shrink-0">
+                  <Wifi className="w-5 h-5" />
+                </div>
+                <div>
+                  <div className="text-xs font-bold text-amber-200">
+                    Wi-Fi Network IP for QR Code &amp; Contestant Devices
+                  </div>
+                  <div className="text-[11px] text-amber-300/80">
+                    Live QR URL: <span className="font-mono text-amber-300 font-bold">{resolvedJoinUrl.joinUrl}</span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2 w-full md:w-auto">
+                <input
+                  type="text"
+                  value={networkIpInput}
+                  onChange={(e) => setNetworkIpInput(e.target.value)}
+                  placeholder="e.g. 192.168.1.15:3000"
+                  className="px-3 py-1.5 rounded-xl bg-black/70 border border-amber-500/40 text-amber-100 font-mono text-xs w-full sm:w-52 focus:outline-none focus:ring-1 focus:ring-amber-400"
+                />
+                <button
+                  type="button"
+                  onClick={() => {
+                    const trimmed = networkIpInput.trim();
+                    const fullUrl = trimmed.startsWith('http://') || trimmed.startsWith('https://')
+                      ? trimmed
+                      : `http://${trimmed}`;
+                    executeAction('set_custom_host_url', { url: fullUrl });
+                  }}
+                  className="px-3 py-1.5 rounded-xl bg-amber-500/20 hover:bg-amber-500/40 border border-amber-400/50 text-amber-200 text-xs font-bold whitespace-nowrap active:scale-95 transition-transform"
+                >
+                  Update QR
+                </button>
+              </div>
+            </div>
+
             {/* 6 Seat Live Roster */}
             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-3">
               {participants.map((p) => {
-                const isReady = p.isClaimed || p.connected;
+                const isReady = Boolean(p.isClaimed);
 
                 return (
                   <div
@@ -399,8 +453,12 @@ export function HostConsole({ state, executeAction }: HostConsoleProps) {
                     <div>
                       <span className="text-2xl">{p.avatar}</span>
                       <div className="text-xs font-bold text-amber-300 mt-1">Seat {p.seatNumber}</div>
-                      <div className="text-xs text-amber-100 font-bold truncate mt-0.5">
-                        {p.claimedName || p.spiritualName}
+                      <div className="text-xs font-bold truncate mt-0.5">
+                        {isReady ? (
+                          <span className="text-amber-100">{p.claimedName || p.spiritualName}</span>
+                        ) : (
+                          <span className="text-amber-300/40 italic">Waiting...</span>
+                        )}
                       </div>
                     </div>
 
@@ -447,6 +505,15 @@ export function HostConsole({ state, executeAction }: HostConsoleProps) {
                 className="px-4 py-3 rounded-2xl bg-black/40 hover:bg-black/60 border border-amber-500/30 text-amber-300 font-bold text-sm flex items-center gap-1.5 transition-all"
               >
                 <span>🐚 Sound Conch</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => executeAction('reset_check_ins')}
+                className="px-4 py-3 rounded-2xl bg-rose-950/40 hover:bg-rose-900/60 border border-rose-500/40 text-rose-300 font-bold text-sm transition-all"
+                title="Reset all 6 seats to unclaimed status"
+              >
+                Reset All Check-Ins
               </button>
 
               <button
@@ -539,17 +606,30 @@ export function HostConsole({ state, executeAction }: HostConsoleProps) {
               {q?.options && (
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-2">
                   {q.options.map((opt, i) => (
-                    <div
+                    <button
                       key={i}
-                      className={`text-xs p-2 rounded-lg border ${
-                        opt === q.correctAnswer
-                          ? 'bg-emerald-950/70 border-emerald-500 text-emerald-200 font-bold'
-                          : 'bg-black/30 border-amber-500/10 text-amber-200/80'
+                      type="button"
+                      onClick={() => executeAction('select_round1_option', { optionIndex: i })}
+                      className={`text-left text-xs p-2.5 rounded-xl border transition-all ${
+                        round1State.selectedOptionIndex === i
+                          ? 'ring-2 ring-amber-400 bg-amber-500/25 border-amber-300 text-amber-100 font-bold shadow'
+                          : opt === q.correctAnswer
+                          ? 'bg-emerald-950/40 border-emerald-500/40 text-emerald-300'
+                          : 'bg-black/30 border-amber-500/10 text-amber-200/80 hover:border-amber-400/40'
                       }`}
                     >
-                      <span className="font-bold text-amber-400 mr-2">{['A', 'B', 'C', 'D'][i]}:</span>
-                      <span>{opt}</span>
-                    </div>
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <span className="font-bold text-amber-400 mr-2">{['A', 'B', 'C', 'D'][i]}:</span>
+                          <span>{opt}</span>
+                        </div>
+                        {round1State.selectedOptionIndex === i && (
+                          <span className="text-[10px] bg-amber-500 text-black px-1.5 py-0.5 rounded font-black shrink-0">
+                            SELECTED
+                          </span>
+                        )}
+                      </div>
+                    </button>
                   ))}
                 </div>
               )}
@@ -559,47 +639,46 @@ export function HostConsole({ state, executeAction }: HostConsoleProps) {
               </div>
             </div>
 
-            {/* Primary Action Buttons for Round 1 */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3">
-              {/* Direct Correct */}
+            {/* Primary Action Buttons for Round 1: Unified 3-Button Deck */}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              {/* 1. Unified Check Answer Button */}
               <button
-                onClick={() => {
-                  executeAction('mark_round1_answer', { isCorrect: true });
-                  soundManager.playCorrect();
+                type="button"
+                onClick={async () => {
+                  const res = await executeAction('check_round1_answer');
+                  if (res && (res as { isCorrect?: boolean }).isCorrect) {
+                    soundManager.playCorrect();
+                  } else {
+                    soundManager.playWrong();
+                  }
                 }}
-                className="p-4 rounded-2xl bg-gradient-to-r from-emerald-600 to-emerald-700 hover:from-emerald-500 hover:to-emerald-600 text-white font-black text-sm shadow-lg flex items-center justify-center gap-2 transition-all"
+                className="p-4 rounded-2xl bg-gradient-to-r from-teal-600 via-emerald-600 to-teal-600 hover:from-teal-500 hover:to-emerald-500 text-white font-black text-sm sm:text-base shadow-xl flex items-center justify-center gap-2 transition-all active:scale-95"
               >
-                <CheckCircle className="w-5 h-5" />
-                <span>{round1State.isPassed ? 'Mark Pass Correct (+5)' : 'Mark Correct (+10)'}</span>
+                <CheckCircle className="w-5 h-5 text-white" />
+                <span>
+                  ✓ Check Answer {round1State.selectedOptionIndex !== null ? `(${['A','B','C','D'][round1State.selectedOptionIndex]})` : ''}
+                </span>
               </button>
 
-              {/* Pass to Next Seat */}
+              {/* 2. Reveal Answer Button */}
               <button
-                onClick={() => {
-                  executeAction('pass_round1_question');
-                  soundManager.playTick();
-                }}
-                disabled={round1State.passCount >= 1}
-                className="p-4 rounded-2xl bg-gradient-to-r from-amber-600 to-amber-700 hover:from-amber-500 hover:to-amber-600 disabled:opacity-40 text-black font-black text-sm shadow-lg flex items-center justify-center gap-2 transition-all"
-              >
-                <ArrowRight className="w-5 h-5" />
-                <span>Pass to Next Seat (Max 1)</span>
-              </button>
-
-              {/* Reveal Answer */}
-              <button
+                type="button"
                 onClick={() => {
                   executeAction('reveal_round1_answer');
-                  soundManager.playBell();
                 }}
-                className="p-4 rounded-2xl bg-purple-950/80 hover:bg-purple-900 border border-purple-500/40 text-purple-200 font-bold text-sm flex items-center justify-center gap-2 transition-all"
+                className={`p-4 rounded-2xl border font-bold text-sm sm:text-base flex items-center justify-center gap-2 transition-all ${
+                  round1State.isAnswerRevealed
+                    ? 'bg-purple-950/40 border-purple-500/30 text-purple-300/70'
+                    : 'bg-purple-900/90 hover:bg-purple-800 border-purple-400 text-purple-100 shadow-lg'
+                }`}
               >
-                <Eye className="w-5 h-5 text-purple-400" />
-                <span>Reveal Answer</span>
+                <Eye className="w-5 h-5 text-purple-300" />
+                <span>{round1State.isAnswerRevealed ? 'Answer Revealed' : 'Reveal Answer'}</span>
               </button>
 
-              {/* Next Question */}
+              {/* 3. Next Question / Finish Round */}
               <button
+                type="button"
                 onClick={() => {
                   const nextIdx = qIndex + 1;
                   if (nextIdx < round1Questions.length) {
@@ -608,9 +687,9 @@ export function HostConsole({ state, executeAction }: HostConsoleProps) {
                     goToPhase('ROUND_1_LEADERBOARD');
                   }
                 }}
-                className="p-4 rounded-2xl bg-black/60 hover:bg-black border border-amber-500/30 text-amber-200 font-bold text-sm flex items-center justify-center gap-2 transition-all"
+                className="p-4 rounded-2xl bg-gradient-to-r from-amber-500 to-yellow-500 hover:from-amber-400 hover:to-yellow-400 text-black font-black text-sm sm:text-base shadow-xl flex items-center justify-center gap-2 transition-all active:scale-95"
               >
-                <FastForward className="w-5 h-5 text-amber-400" />
+                <FastForward className="w-5 h-5 text-black" />
                 <span>
                   {qIndex < round1Questions.length - 1 ? 'Next Question →' : 'Finish Round 1 →'}
                 </span>
@@ -900,11 +979,26 @@ export function HostConsole({ state, executeAction }: HostConsoleProps) {
 
                 {/* Primary Action Buttons */}
                 <div className="flex flex-wrap items-center gap-2.5 pt-1">
+                  {/* CHECK ANSWER BUTTON */}
+                  <button
+                    onClick={async () => {
+                      const res = await executeAction('check_round3_answer');
+                      if (res && (res as { isCorrect?: boolean }).isCorrect) {
+                        soundManager.playCorrect();
+                      } else {
+                        soundManager.playWrong();
+                      }
+                    }}
+                    className="py-3 px-4 rounded-xl bg-gradient-to-r from-teal-600 via-emerald-600 to-teal-600 hover:from-teal-500 hover:to-emerald-500 text-white font-black text-xs shadow-md flex items-center gap-1.5 transition-all active:scale-95"
+                  >
+                    <CheckCircle className="w-4 h-4 text-white" />
+                    <span>✓ Check Answer (+15 / -5)</span>
+                  </button>
+
                   {/* ONE-CLICK REVEAL & SCORE: Works when option is picked */}
                   <button
                     onClick={() => {
                       executeAction('reveal_round3_answer');
-                      soundManager.playBell();
                     }}
                     className="flex-1 py-3 px-4 rounded-xl bg-purple-950 text-purple-100 hover:bg-purple-900 border border-purple-400 font-black text-sm shadow-md flex items-center justify-center gap-2 transition-all"
                   >

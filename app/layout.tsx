@@ -2,16 +2,16 @@ import type {Metadata} from 'next';
 import './globals.css'; // Global styles
 
 export const metadata: Metadata = {
-  title: 'Viplava 2026: Srila Prabhupada Maha Quiz | Mathura-Gokul Dham',
+  title: 'Viplava 2026: A Quiz on Srila Prabhupada Life | Mathura-Gokul Dham',
   description: 'Interactive 6-player LAN and web spiritual quiz platform celebrating Srila Prabhupada and Viplava 2026 at Gokul, Mathura Dham.',
   openGraph: {
-    title: 'Viplava 2026: Srila Prabhupada Maha Quiz',
+    title: 'Viplava 2026: A Quiz on Srila Prabhupada Life',
     description: 'Interactive 6-player spiritual quiz platform with Direct & Pass, Rapid Fire, and Buzzer rounds.',
     type: 'website',
   },
   twitter: {
     card: 'summary_large_image',
-    title: 'Viplava 2026: Srila Prabhupada Maha Quiz',
+    title: 'Viplava 2026: A Quiz on Srila Prabhupada Life',
     description: 'Interactive 6-player spiritual quiz platform with Direct & Pass, Rapid Fire, and Buzzer rounds.',
   },
 };

@@ -4,21 +4,36 @@ import React, { useState, useEffect } from 'react';
 import { X, Copy, Check, Smartphone, Wifi, QrCode } from 'lucide-react';
 import { Participant } from '@/lib/types';
 import { QRCodeDisplay } from '@/components/QRCodeDisplay';
+import { resolveParticipantJoinUrl } from '@/lib/networkHelper';
 
 interface JoinQRModalProps {
   isOpen: boolean;
   onClose: () => void;
   participants: Participant[];
   onSelectSeat?: (seat: number) => void;
+  customHostUrl?: string;
+  detectedNetworkIp?: string;
 }
 
 const subscribeOrigin = () => () => {};
 const getOriginSnapshot = () => (typeof window !== 'undefined' ? window.location.origin : '');
 const getOriginServerSnapshot = () => '';
 
-export function JoinQRModal({ isOpen, onClose, participants, onSelectSeat }: JoinQRModalProps) {
+export function JoinQRModal({
+  isOpen,
+  onClose,
+  participants,
+  onSelectSeat,
+  customHostUrl,
+  detectedNetworkIp,
+}: JoinQRModalProps) {
   const [copied, setCopied] = useState(false);
-  const currentUrl = React.useSyncExternalStore(subscribeOrigin, getOriginSnapshot, getOriginServerSnapshot);
+  const currentOrigin = React.useSyncExternalStore(subscribeOrigin, getOriginSnapshot, getOriginServerSnapshot);
+  const { joinUrl, displayAddress } = resolveParticipantJoinUrl(
+    currentOrigin,
+    customHostUrl,
+    detectedNetworkIp
+  );
 
   if (!isOpen) return null;
 
@@ -57,23 +72,29 @@ export function JoinQRModal({ isOpen, onClose, participants, onSelectSeat }: Joi
             <div className="p-4 rounded-xl bg-purple-950/40 border border-purple-500/30 space-y-2">
               <div className="flex items-center gap-2 text-amber-300 font-semibold text-sm">
                 <Wifi className="w-4 h-4 text-amber-400" />
-                <span>Local Router Setup (Offline / No Wi-Fi)</span>
+                <span>Local Router / Hotspot Setup</span>
               </div>
               <p className="text-xs text-amber-100/80 leading-relaxed">
-                Connect the 6 participant phones to the same Wi-Fi router or laptop mobile hotspot. Then open the browser on each phone and navigate to:
+                Connect the 6 participant phones to the same Wi-Fi router or laptop hotspot. Then scan the QR code or navigate to:
               </p>
               <div className="flex items-center gap-2 bg-black/50 p-2.5 rounded-lg border border-amber-500/30">
                 <code className="text-xs text-amber-300 font-mono break-all flex-1">
-                  {currentUrl ? `${currentUrl}?view=participant` : 'http://<laptop-ip>:3000?view=participant'}
+                  {joinUrl || 'http://<network-ip>:3000/?view=participant'}
                 </code>
                 <button
-                  onClick={() => copyUrl(`${currentUrl}?view=participant`)}
+                  onClick={() => copyUrl(joinUrl)}
                   className="p-1.5 rounded bg-amber-500/20 hover:bg-amber-500/40 text-amber-300 transition-colors shrink-0"
                   title="Copy Link"
                 >
                   {copied ? <Check className="w-4 h-4 text-emerald-400" /> : <Copy className="w-4 h-4" />}
                 </button>
               </div>
+              {displayAddress && (
+                <div className="text-[11px] text-emerald-400 font-mono flex items-center gap-1.5">
+                  <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+                  Detected Wi-Fi IP: {displayAddress}
+                </div>
+              )}
             </div>
 
             <div className="space-y-2">
@@ -95,7 +116,9 @@ export function JoinQRModal({ isOpen, onClose, participants, onSelectSeat }: Joi
                       <div className="text-xs font-bold text-amber-200 group-hover:text-amber-100 truncate">
                         Seat {p.seatNumber}
                       </div>
-                      <div className="text-[10px] text-amber-300/60 truncate">{p.spiritualName}</div>
+                      <div className="text-[10px] text-amber-300/60 truncate">
+                        {p.isClaimed && p.claimedName ? p.claimedName : (p.spiritualName || 'Waiting...')}
+                      </div>
                     </div>
                   </button>
                 ))}
@@ -105,9 +128,9 @@ export function JoinQRModal({ isOpen, onClose, participants, onSelectSeat }: Joi
 
           {/* QR Code Card */}
           <div className="flex flex-col items-center justify-center p-5 rounded-xl bg-gradient-to-b from-amber-950/40 to-purple-950/40 border border-amber-500/30 text-center">
-            <div className="mb-3">
+            <div className="mb-3 bg-white p-2 rounded-xl shadow-lg">
               <QRCodeDisplay
-                text={`${currentUrl}?view=participant`}
+                text={joinUrl || 'http://localhost:3000/?view=participant'}
                 size={170}
                 darkColor="#0b0713"
               />
@@ -117,7 +140,7 @@ export function JoinQRModal({ isOpen, onClose, participants, onSelectSeat }: Joi
               <span>Scan to open Participant Controller</span>
             </div>
             <p className="text-[11px] text-amber-200/60 mt-1">
-              Students choose their Seat (1 to 6) on their phone screen.
+              Phones automatically open to the seat selection and registration screen.
             </p>
           </div>
         </div>

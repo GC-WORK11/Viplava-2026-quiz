@@ -18,6 +18,7 @@ import {
 import { QuizState } from '@/lib/types';
 import { soundManager } from '@/lib/soundEffects';
 import { QRCodeDisplay } from '@/components/QRCodeDisplay';
+import { resolveParticipantJoinUrl } from '@/lib/networkHelper';
 
 const subscribeOrigin = () => () => {};
 const getOriginSnapshot = () => (typeof window !== 'undefined' ? window.location.origin : '');
@@ -48,7 +49,11 @@ export function PresenterScreen({ state, isStandalone = false }: PresenterScreen
   } = state;
 
   const currentOrigin = React.useSyncExternalStore(subscribeOrigin, getOriginSnapshot, getOriginServerSnapshot);
-  const joinUrl = currentOrigin ? `${currentOrigin}/?view=participant` : '/?view=participant';
+  const { joinUrl, displayAddress } = resolveParticipantJoinUrl(
+    currentOrigin,
+    state.customHostUrl,
+    state.detectedNetworkIp
+  );
 
   const [isFullscreen, setIsFullscreen] = React.useState(false);
 
@@ -130,7 +135,7 @@ export function PresenterScreen({ state, isStandalone = false }: PresenterScreen
           </div>
 
           <div className="mt-8 text-xs text-amber-400/70 font-semibold tracking-widest uppercase">
-            Viplava 2026 • Gokul Mathura Dham • Offline Platform
+            Viplava 2026 • Gokul Mathura Dham
           </div>
         </div>
       </div>
@@ -149,10 +154,10 @@ export function PresenterScreen({ state, isStandalone = false }: PresenterScreen
           <span className="text-2xl">🦚</span>
           <div>
             <h1 className="text-lg md:text-xl font-cinzel font-black text-amber-300 tracking-wider">
-              VIPLAVA 2026 • SRILA PRABHUPADA MAHA QUIZ
+              VIPLAVA 2026 • A QUIZ ON SRILA PRABHUPADA LIFE
             </h1>
             <p className="text-xs text-amber-200/60 font-medium">
-              Gokul, Mathura Dham • 100% Offline Local System
+              Gokul, Mathura Dham • Youth Festival
             </p>
           </div>
         </div>
@@ -200,7 +205,7 @@ export function PresenterScreen({ state, isStandalone = false }: PresenterScreen
         <div className="flex-1 flex flex-col justify-center py-4 z-10">
           {/* 1. LOBBY: LIVE CHECK-IN ROSTER & QR CODE */}
           {phase === 'LOBBY' && (() => {
-            const claimedCount = participants.filter((p) => p.isClaimed || p.connected).length;
+            const claimedCount = participants.filter((p) => Boolean(p.isClaimed)).length;
             const allReady = claimedCount >= 6;
 
             return (
@@ -210,7 +215,7 @@ export function PresenterScreen({ state, isStandalone = false }: PresenterScreen
                   <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-amber-500/10 border border-amber-400/30 text-amber-300 text-xs font-semibold uppercase tracking-wider mb-1">
                     <span>🦚 Viplava 2026</span>
                     <span>•</span>
-                    <span>Srila Prabhupada Maha Quiz</span>
+                    <span>A Quiz on Srila Prabhupada Life</span>
                   </div>
                   <h2 className="text-3xl sm:text-5xl font-black font-cinzel text-transparent bg-clip-text bg-gradient-to-r from-amber-200 via-yellow-300 to-amber-500 leading-tight">
                     Contestant Check-In &amp; Registration
@@ -250,7 +255,7 @@ export function PresenterScreen({ state, isStandalone = false }: PresenterScreen
                     <div className="w-full text-left bg-black/40 rounded-2xl p-3.5 border border-amber-500/20 text-xs space-y-2 text-amber-200/80">
                       <div className="flex items-start gap-2">
                         <span className="w-4 h-4 rounded-full bg-amber-500/30 text-amber-300 font-bold flex items-center justify-center text-[10px] shrink-0 mt-0.5">1</span>
-                        <span>Point camera at this QR code or navigate to direct link.</span>
+                        <span>Point camera at this QR code or navigate to Wi-Fi link below.</span>
                       </div>
                       <div className="flex items-start gap-2">
                         <span className="w-4 h-4 rounded-full bg-amber-500/30 text-amber-300 font-bold flex items-center justify-center text-[10px] shrink-0 mt-0.5">2</span>
@@ -262,8 +267,14 @@ export function PresenterScreen({ state, isStandalone = false }: PresenterScreen
                       </div>
                     </div>
 
-                    <div className="text-[11px] font-mono text-amber-300/70 truncate max-w-full">
-                      Direct: <span className="text-amber-300 font-semibold">{joinUrl}</span>
+                    {/* Wi-Fi Direct Address */}
+                    <div className="w-full text-center bg-black/50 p-2.5 rounded-xl border border-amber-500/30 space-y-1">
+                      <div className="text-[10px] uppercase font-black tracking-wider text-amber-400 flex items-center justify-center gap-1.5">
+                        <Wifi className="w-3.5 h-3.5" /> Wi-Fi Network Direct Link
+                      </div>
+                      <div className="text-xs font-mono font-bold text-amber-200 break-all select-all">
+                        {joinUrl}
+                      </div>
                     </div>
                   </div>
 
@@ -287,7 +298,7 @@ export function PresenterScreen({ state, isStandalone = false }: PresenterScreen
                     {/* 6 Seat Cards Grid */}
                     <div className="grid grid-cols-2 sm:grid-cols-3 gap-3.5 flex-1">
                       {participants.map((p) => {
-                        const isReady = p.isClaimed || p.connected;
+                        const isReady = Boolean(p.isClaimed);
 
                         return (
                           <div
@@ -315,8 +326,12 @@ export function PresenterScreen({ state, isStandalone = false }: PresenterScreen
                               <div className="text-[11px] uppercase font-bold text-amber-400/70">
                                 Contestant
                               </div>
-                              <div className="text-sm sm:text-base font-black text-amber-100 truncate font-cinzel">
-                                {p.claimedName || p.spiritualName}
+                              <div className="text-sm sm:text-base font-black truncate font-cinzel">
+                                {isReady ? (
+                                  <span className="text-amber-100">{p.claimedName || p.spiritualName}</span>
+                                ) : (
+                                  <span className="text-amber-300/40 italic">Waiting to Claim</span>
+                                )}
                               </div>
                             </div>
 
@@ -395,7 +410,7 @@ export function PresenterScreen({ state, isStandalone = false }: PresenterScreen
                         {round1State.isPassed ? '⚡ PASSED QUESTION (+5 PTS)' : 'DIRECT QUESTION (+10 PTS)'}
                       </div>
                       <div className="text-base font-bold text-amber-100 font-cinzel">
-                        Seat {activeSeat}: {activeParticipant?.spiritualName}
+                        Seat {activeSeat}: {activeParticipant?.claimedName || activeParticipant?.spiritualName || activeParticipant?.name || `Seat ${activeSeat}`}
                       </div>
                     </div>
                   </div>
@@ -485,7 +500,7 @@ export function PresenterScreen({ state, isStandalone = false }: PresenterScreen
                     <div>
                       <div className="text-xs font-black uppercase">Rapid Fire Blitz</div>
                       <div className="text-xl font-black font-cinzel">
-                        Seat {activeSeat}: {participant?.spiritualName}
+                        Seat {activeSeat}: {participant?.claimedName || participant?.spiritualName || participant?.name || `Seat ${activeSeat}`}
                       </div>
                     </div>
                   </div>
@@ -557,7 +572,7 @@ export function PresenterScreen({ state, isStandalone = false }: PresenterScreen
                             ⚡ BUZZED IN FIRST
                           </div>
                           <div className="text-lg md:text-xl font-black font-cinzel text-black">
-                            Seat {buzzedParticipant?.seatNumber}: {buzzedParticipant?.spiritualName}
+                            Seat {buzzedParticipant?.seatNumber}: {buzzedParticipant?.claimedName || buzzedParticipant?.spiritualName || buzzedParticipant?.name || `Seat ${buzzedParticipant?.seatNumber}`}
                           </div>
                         </>
                       ) : buzzerState.isUnlocked ? (

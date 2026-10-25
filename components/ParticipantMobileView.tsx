@@ -101,7 +101,14 @@ export function ParticipantMobileView({ state, executeAction, forcedSeat }: Part
 
   const handleClaimSeat = async (seat: number, name: string) => {
     const finalName = name.trim();
+    // Guard: Do not allow claiming if seat is already claimed by someone else
+    const target = participants.find((p) => p.seatNumber === seat);
+    if (target?.isClaimed && target.seatNumber !== selectedSeat) {
+      return;
+    }
+
     setOverrideSeat(seat);
+    setPendingSeat(seat);
     try {
       localStorage.setItem('viplava_participant_seat', String(seat));
       if (finalName) {
@@ -122,12 +129,20 @@ export function ParticipantMobileView({ state, executeAction, forcedSeat }: Part
       }
     }
     soundManager.playTick();
-    await executeAction('claim_seat', { seatNumber: seat, name: finalName });
+    await executeAction('claim_seat', { seatNumber: seat, name: finalName, participantId: target?.id });
     setIsEditingClaim(false);
   };
 
   const handleSelectSeat = (seat: number) => {
+    // If seat is claimed by another contestant, do not switch or give that seat
+    const target = participants.find((p) => p.seatNumber === seat);
+    if (target?.isClaimed && target.seatNumber !== selectedSeat) {
+      return;
+    }
+
+    // Synchronize both top and bottom selected seat
     setOverrideSeat(seat);
+    setPendingSeat(seat);
     try {
       localStorage.setItem('viplava_participant_seat', String(seat));
       window.dispatchEvent(new Event('viplava-seat-change'));
@@ -155,18 +170,50 @@ export function ParticipantMobileView({ state, executeAction, forcedSeat }: Part
     await executeAction('press_buzzer', { participantId });
   };
 
+  const [isSubmittingAnswer, setIsSubmittingAnswer] = useState(false);
+
   // Option select handler for Round 3
   const handleSelectBuzzerOption = async (optionIndex: number) => {
     if (round3State.isAnswerRevealed) return;
-    soundManager.playTick();
     await executeAction('select_buzzer_option', { participantId, optionIndex });
   };
 
   // Option select handler for Round 1
   const handleSelectRound1Option = async (optionIndex: number) => {
     if (round1State.isAnswerRevealed) return;
-    soundManager.playTick();
     await executeAction('select_round1_option', { optionIndex });
+  };
+
+  // Check Answer Handler for Round 1
+  const handleCheckRound1Answer = async () => {
+    if (round1State.isAnswerRevealed || round1State.selectedOptionIndex === null) return;
+    setIsSubmittingAnswer(true);
+    try {
+      const res = await executeAction('check_round1_answer');
+      if (res && (res as { isCorrect?: boolean }).isCorrect) {
+        soundManager.playCorrect();
+      } else {
+        soundManager.playWrong();
+      }
+    } finally {
+      setIsSubmittingAnswer(false);
+    }
+  };
+
+  // Check Answer Handler for Round 3
+  const handleCheckRound3Answer = async () => {
+    if (round3State.isAnswerRevealed || buzzerState.selectedOptionIndex === null) return;
+    setIsSubmittingAnswer(true);
+    try {
+      const res = await executeAction('check_round3_answer');
+      if (res && (res as { isCorrect?: boolean }).isCorrect) {
+        soundManager.playCorrect();
+      } else {
+        soundManager.playWrong();
+      }
+    } finally {
+      setIsSubmittingAnswer(false);
+    }
   };
 
   // Turn status checks
@@ -210,19 +257,29 @@ export function ParticipantMobileView({ state, executeAction, forcedSeat }: Part
               <User className="w-3 h-3" /> Seat:
             </span>
             <div className="flex items-center gap-1">
-              {[1, 2, 3, 4, 5, 6].map((seat) => (
-                <button
-                  key={seat}
-                  onClick={() => handleSelectSeat(seat)}
-                  className={`w-6 h-6 rounded-md text-[11px] font-bold border transition-all ${
-                    seat === selectedSeat
-                      ? 'bg-amber-500 text-black border-yellow-200 font-black shadow'
-                      : 'bg-black/40 text-amber-300/60 border-amber-500/20 hover:text-amber-100'
-                  }`}
-                >
-                  {seat}
-                </button>
-              ))}
+              {[1, 2, 3, 4, 5, 6].map((seat) => {
+                const targetP = participants.find((p) => p.seatNumber === seat);
+                const isClaimedByOther = targetP?.isClaimed && targetP?.seatNumber !== selectedSeat;
+
+                return (
+                  <button
+                    key={seat}
+                    type="button"
+                    disabled={isClaimedByOther}
+                    onClick={() => handleSelectSeat(seat)}
+                    className={`w-6 h-6 rounded-md text-[11px] font-bold border transition-all ${
+                      seat === selectedSeat
+                        ? 'bg-amber-500 text-black border-yellow-200 font-black shadow'
+                        : isClaimedByOther
+                        ? 'bg-black/20 text-stone-600 border-stone-800 cursor-not-allowed opacity-30'
+                        : 'bg-black/40 text-amber-300/60 border-amber-500/20 hover:text-amber-100 hover:border-amber-400'
+                    }`}
+                    title={isClaimedByOther ? `Seat ${seat} already claimed by ${targetP?.claimedName || targetP?.spiritualName}` : `Select Seat ${seat}`}
+                  >
+                    {seat}
+                  </button>
+                );
+              })}
             </div>
           </div>
 
@@ -282,18 +339,30 @@ export function ParticipantMobileView({ state, executeAction, forcedSeat }: Part
                   <button
                     key={seatNum}
                     type="button"
-                    onClick={() => setPendingSeat(seatNum)}
+                    disabled={isAlreadyClaimed}
+                    onClick={() => {
+                      if (!isAlreadyClaimed) {
+                        setPendingSeat(seatNum);
+                        setOverrideSeat(seatNum);
+                        try {
+                          localStorage.setItem('viplava_participant_seat', String(seatNum));
+                          window.dispatchEvent(new Event('viplava-seat-change'));
+                        } catch {
+                          // Safe fallback
+                        }
+                      }
+                    }}
                     className={`p-2.5 rounded-xl border text-left transition-all ${
                       isSelected
                         ? 'bg-amber-500 text-black border-yellow-200 font-black shadow-lg scale-102 ring-2 ring-amber-400/50'
                         : isAlreadyClaimed
-                        ? 'bg-black/20 border-amber-500/20 text-amber-300/40 opacity-60'
+                        ? 'bg-black/20 border-stone-800 text-stone-500 opacity-40 cursor-not-allowed'
                         : 'bg-black/50 border-amber-500/30 text-amber-200 hover:border-amber-400/60'
                     }`}
                   >
                     <div className="flex items-center justify-between">
                       <span className="text-lg">{targetParticipant?.avatar}</span>
-                      <span className={`text-[10px] font-mono font-bold ${isSelected ? 'text-black' : 'text-amber-400'}`}>
+                      <span className={`text-[10px] font-mono font-bold ${isSelected ? 'text-black' : isAlreadyClaimed ? 'text-stone-500' : 'text-amber-400'}`}>
                         #{seatNum}
                       </span>
                     </div>
@@ -301,7 +370,9 @@ export function ParticipantMobileView({ state, executeAction, forcedSeat }: Part
                       Seat {seatNum}
                     </div>
                     <div className="text-[9px] truncate opacity-80">
-                      {targetParticipant?.claimedName || targetParticipant?.spiritualName}
+                      {targetParticipant?.isClaimed && targetParticipant?.claimedName
+                        ? `Claimed (${targetParticipant.claimedName})`
+                        : 'Available'}
                     </div>
                   </button>
                 );
@@ -310,24 +381,38 @@ export function ParticipantMobileView({ state, executeAction, forcedSeat }: Part
           </div>
 
           {/* Confirm Button */}
-          <div className="pt-2 flex items-center gap-2">
-            {isEditingClaim && (
-              <button
-                type="button"
-                onClick={() => setIsEditingClaim(false)}
-                className="flex-1 py-2.5 rounded-xl bg-white/10 hover:bg-white/15 text-amber-200 text-xs font-bold transition-colors"
-              >
-                Cancel
-              </button>
-            )}
-            <button
-              type="button"
-              onClick={() => handleClaimSeat(pendingSeat, inputName || participant?.spiritualName || `Seat ${pendingSeat}`)}
-              className="flex-1 py-2.5 rounded-xl bg-gradient-to-r from-amber-500 to-yellow-500 hover:from-amber-400 hover:to-yellow-400 text-black font-black text-xs sm:text-sm shadow-xl flex items-center justify-center gap-1.5 transition-transform active:scale-95"
-            >
-              <span>Confirm &amp; Claim Seat</span>
-            </button>
-          </div>
+          {(() => {
+            const pendingTarget = participants.find((p) => p.seatNumber === pendingSeat);
+            const isPendingClaimedByOther = pendingTarget?.isClaimed && pendingTarget?.seatNumber !== selectedSeat;
+
+            return (
+              <div className="pt-2 flex items-center gap-2">
+                {isEditingClaim && (
+                  <button
+                    type="button"
+                    onClick={() => setIsEditingClaim(false)}
+                    className="flex-1 py-2.5 rounded-xl bg-white/10 hover:bg-white/15 text-amber-200 text-xs font-bold transition-colors"
+                  >
+                    Cancel
+                  </button>
+                )}
+                <button
+                  type="button"
+                  disabled={isPendingClaimedByOther}
+                  onClick={() => handleClaimSeat(pendingSeat, inputName || participant?.spiritualName || `Seat ${pendingSeat}`)}
+                  className={`flex-1 py-2.5 rounded-xl font-black text-xs sm:text-sm shadow-xl flex items-center justify-center gap-1.5 transition-transform active:scale-95 ${
+                    isPendingClaimedByOther
+                      ? 'bg-stone-800 text-stone-500 cursor-not-allowed border border-stone-700'
+                      : 'bg-gradient-to-r from-amber-500 to-yellow-500 hover:from-amber-400 hover:to-yellow-400 text-black'
+                  }`}
+                >
+                  <span>
+                    {isPendingClaimedByOther ? `Seat ${pendingSeat} Already Claimed` : 'Confirm & Claim Seat'}
+                  </span>
+                </button>
+              </div>
+            );
+          })()}
         </div>
       )}
 
@@ -353,7 +438,7 @@ export function ParticipantMobileView({ state, executeAction, forcedSeat }: Part
               </p>
               <div className="p-2.5 rounded-xl bg-black/40 border border-emerald-500/30 text-emerald-300 text-xs font-semibold flex items-center justify-center gap-2">
                 <Radio className="w-4 h-4 text-emerald-400 animate-pulse" />
-                <span>Connected &amp; 100% Offline</span>
+                <span>Connected &amp; Ready</span>
               </div>
             </div>
           )}
@@ -441,6 +526,21 @@ export function ParticipantMobileView({ state, executeAction, forcedSeat }: Part
                           </button>
                         );
                       })}
+                    </div>
+                  )}
+
+                  {/* Check Answer Button */}
+                  {isRound1MyTurn && !isRevealed && round1State.selectedOptionIndex !== null && (
+                    <div className="pt-2">
+                      <button
+                        type="button"
+                        onClick={handleCheckRound1Answer}
+                        disabled={isSubmittingAnswer}
+                        className="w-full py-3.5 px-4 rounded-xl bg-gradient-to-r from-emerald-600 via-teal-600 to-emerald-600 hover:from-emerald-500 hover:to-teal-500 text-white font-extrabold text-sm uppercase tracking-wider shadow-[0_0_20px_rgba(16,185,129,0.4)] flex items-center justify-center gap-2 transition-all active:scale-95 animate-pulse"
+                      >
+                        <CheckCircle className="w-5 h-5 text-white" />
+                        <span>{isSubmittingAnswer ? 'Checking Answer...' : '✓ Check Answer'}</span>
+                      </button>
                     </div>
                   )}
 
@@ -604,10 +704,18 @@ export function ParticipantMobileView({ state, executeAction, forcedSeat }: Part
                       })}
                     </div>
 
-                    {/* Status reminder after contestant taps option */}
+                    {/* Check Answer Button for Round 3 */}
                     {didIBuzzFirst && buzzerState.selectedOptionIndex !== null && !isRevealed && (
-                      <div className="p-2.5 rounded-xl bg-amber-500/20 border border-amber-400/50 text-amber-300 text-xs font-bold text-center animate-pulse">
-                        ✨ Option {letters[buzzerState.selectedOptionIndex]} is displayed on the Projector! Waiting for Host to reveal...
+                      <div className="pt-2">
+                        <button
+                          type="button"
+                          onClick={handleCheckRound3Answer}
+                          disabled={isSubmittingAnswer}
+                          className="w-full py-3.5 px-4 rounded-xl bg-gradient-to-r from-emerald-600 via-teal-600 to-emerald-600 hover:from-emerald-500 hover:to-teal-500 text-white font-extrabold text-sm uppercase tracking-wider shadow-[0_0_20px_rgba(16,185,129,0.4)] flex items-center justify-center gap-2 transition-all active:scale-95 animate-pulse"
+                        >
+                          <CheckCircle className="w-5 h-5 text-white" />
+                          <span>{isSubmittingAnswer ? 'Checking Answer...' : '✓ Check Answer (+15 / -5)'}</span>
+                        </button>
                       </div>
                     )}
                   </div>
@@ -685,16 +793,16 @@ export function ParticipantMobileView({ state, executeAction, forcedSeat }: Part
               <div className="text-4xl">👑</div>
               <h3 className="text-xl font-black font-cinzel text-amber-300">Viplava 2026 Finale</h3>
               <p className="text-xs text-amber-100">
-                Hare Krishna! Srila Prabhupada Maha Quiz has concluded!
+                Hare Krishna! A Quiz on Srila Prabhupada Life has concluded!
               </p>
             </div>
           )}
         </div>
       )}
 
-      {/* 3. Footer: Simple Offline LAN status */}
+      {/* 3. Footer */}
       <div className="py-2 text-center text-[10px] text-amber-400/50 uppercase tracking-widest font-semibold border-t border-amber-500/10">
-        100% Offline LAN • Mathura-Gokul Dham
+        Mathura-Gokul Dham • Viplava 2026
       </div>
     </div>
   );

@@ -65,7 +65,7 @@ export function HostRunbookModal({
   };
 
   const participants = state.participants;
-  const claimedCount = participants.filter((p) => p.isClaimed || p.connected).length;
+  const claimedCount = participants.filter((p) => Boolean(p.isClaimed)).length;
 
   const acts: Act[] = [
     {
@@ -343,7 +343,7 @@ export function HostRunbookModal({
 
           <div className="flex items-center gap-1.5 overflow-x-auto max-w-full py-0.5">
             {participants.map((p) => {
-              const isReady = p.isClaimed || p.connected;
+              const isReady = Boolean(p.isClaimed);
               return (
                 <div
                   key={p.id}
@@ -352,12 +352,12 @@ export function HostRunbookModal({
                       ? 'bg-emerald-950/60 border-emerald-500/40 text-emerald-300'
                       : 'bg-black/40 border-amber-500/20 text-amber-400/50'
                   }`}
-                  title={`Seat ${p.seatNumber}: ${p.spiritualName}`}
+                  title={`Seat ${p.seatNumber}: ${isReady ? (p.claimedName || p.spiritualName) : 'Unclaimed'}`}
                 >
                   <span className="text-xs">{p.avatar}</span>
                   <span className="font-bold">S{p.seatNumber}</span>
                   <span className="truncate max-w-[70px]">
-                    {p.claimedName || p.spiritualName.split(' ')[0]}
+                    {isReady ? (p.claimedName || p.spiritualName.split(' ')[0]) : 'Waiting'}
                   </span>
                   {isReady ? (
                     <CheckCircle2 className="w-3 h-3 text-emerald-400 shrink-0" />
@@ -508,7 +508,7 @@ export function HostRunbookModal({
         {/* MODAL FOOTER */}
         <div className="p-3 sm:p-4 bg-[#1b0f2e] border-t border-amber-500/25 flex flex-wrap items-center justify-between gap-3">
           <div className="text-xs text-amber-400/70 font-medium">
-            Viplava 2026 • Srila Prabhupada Maha Quiz Conductor Runbook
+            Viplava 2026 • A Quiz on Srila Prabhupada Life Runbook
           </div>
 
           <div className="flex items-center gap-2">

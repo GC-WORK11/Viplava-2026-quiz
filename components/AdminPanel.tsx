@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Settings,
   BookOpen,
@@ -140,6 +140,18 @@ export function AdminPanel({ state, executeAction }: AdminPanelProps) {
   ) => {
     await executeAction('adjust_score', { participantId, round, delta });
     notifySave(`Score adjusted (${delta > 0 ? '+' : ''}${delta}) for participant!`);
+  };
+
+  const handleReleaseSeat = async (seatNumber: number) => {
+    await executeAction('release_seat', { seatNumber });
+    notifySave(`Seat #${seatNumber} released!`);
+  };
+
+  const handleResetCheckIns = async () => {
+    if (confirm('Reset all 6 participant check-in statuses to Waiting?')) {
+      await executeAction('reset_check_ins');
+      notifySave('All check-ins reset to Waiting!');
+    }
   };
 
   // Round 1
@@ -1138,13 +1150,22 @@ export function AdminPanel({ state, executeAction }: AdminPanelProps) {
       {/* ---------------- 6. 6 SEATS & DIRECT SCORE CORRECTION ---------------- */}
       {activeTab === 'participants' && (
         <div className="p-6 rounded-3xl bg-[#140c24] border-2 border-amber-500/30 space-y-6 shadow-xl">
-          <div>
-            <h3 className="text-lg font-bold font-cinzel text-amber-200">
-              6 Contestant Seats Configuration &amp; Score Correction
-            </h3>
-            <p className="text-xs text-amber-200/70">
-              Configure name, spiritual title, and avatar for each seat, or manually remove mistakenly added score points.
-            </p>
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <h3 className="text-lg font-bold font-cinzel text-amber-200">
+                6 Contestant Seats Configuration &amp; Score Correction
+              </h3>
+              <p className="text-xs text-amber-200/70">
+                Configure name, spiritual title, and avatar for each seat, or manually remove mistakenly added score points.
+              </p>
+            </div>
+            <button
+              onClick={handleResetCheckIns}
+              className="px-3.5 py-2 rounded-xl bg-rose-950/60 hover:bg-rose-900 border border-rose-500/40 text-rose-300 font-bold text-xs flex items-center gap-1.5 transition-colors"
+            >
+              <RotateCcw className="w-3.5 h-3.5" />
+              <span>Reset All Check-Ins</span>
+            </button>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -1154,8 +1175,29 @@ export function AdminPanel({ state, executeAction }: AdminPanelProps) {
                 className="p-4 rounded-2xl bg-black/40 border border-amber-500/30 space-y-3"
               >
                 <div className="flex items-center justify-between">
-                  <span className="text-xs font-bold text-amber-400 uppercase">Seat #{p.seatNumber}</span>
                   <div className="flex items-center gap-2">
+                    <span className="text-xs font-bold text-amber-400 uppercase">Seat #{p.seatNumber}</span>
+                    {p.isClaimed ? (
+                      <span className="px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 text-[10px] font-bold border border-emerald-500/30 flex items-center gap-1">
+                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
+                        Claimed: {p.claimedName || p.name}
+                      </span>
+                    ) : (
+                      <span className="px-2 py-0.5 rounded-full bg-slate-500/20 text-slate-300 text-[10px] font-bold border border-slate-500/30">
+                        Waiting to Join...
+                      </span>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-2">
+                    {p.isClaimed && (
+                      <button
+                        onClick={() => handleReleaseSeat(p.seatNumber)}
+                        className="px-2 py-1 rounded-lg bg-rose-950/60 hover:bg-rose-900 text-rose-300 border border-rose-500/30 font-bold text-[10px]"
+                        title="Release this seat so another contestant can claim it"
+                      >
+                        Release Seat
+                      </button>
+                    )}
                     <span className="px-2 py-0.5 rounded bg-amber-500/20 text-amber-300 text-xs font-extrabold border border-amber-500/30">
                       Total: {p.totalScore} pts
                     </span>
@@ -1330,7 +1372,7 @@ export function AdminPanel({ state, executeAction }: AdminPanelProps) {
               Quiz State &amp; Question Bank Maintenance
             </h3>
             <p className="text-xs text-amber-200/70">
-              Export full settings to JSON for offline backup, or reset scores for a new tournament.
+              Export full settings to JSON for local backup, or reset scores for a new tournament.
             </p>
           </div>
 
