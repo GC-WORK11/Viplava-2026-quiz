@@ -3,8 +3,25 @@ import { quizStore } from '@/lib/quizStore';
 
 export const dynamic = 'force-dynamic';
 
-export async function GET() {
+// Keep the advertised join-port truthful. An explicit PORT env (set by our
+// launch scripts) is authoritative; otherwise trust the Host header port —
+// whichever port clients actually reach us on.
+function syncServerPort(req: NextRequest) {
+  if (process.env.PORT) {
+    quizStore.setServerPort(process.env.PORT);
+    return;
+  }
+  const host = req.headers.get('host');
+  if (!host) return;
+  const port = host.includes(':') ? host.split(':').pop() : undefined;
+  if (port && /^\d+$/.test(port)) {
+    quizStore.setServerPort(port);
+  }
+}
+
+export async function GET(req: NextRequest) {
   try {
+    syncServerPort(req);
     const state = quizStore.getState();
     return NextResponse.json({ success: true, state });
   } catch (err: unknown) {
@@ -15,6 +32,7 @@ export async function GET() {
 
 export async function POST(req: NextRequest) {
   try {
+    syncServerPort(req);
     const body = await req.json();
     const { action, payload } = body;
 
@@ -85,11 +103,11 @@ export async function POST(req: NextRequest) {
         break;
 
       case 'press_buzzer':
-        result = quizStore.pressBuzzer(payload.participantId);
+        result = quizStore.pressBuzzer(payload.participantId, payload.clientTs, payload.rttMs);
         break;
 
       case 'select_buzzer_option':
-        result = quizStore.selectBuzzerOption(payload.participantId, payload.optionIndex);
+        result = quizStore.selectBuzzerOption(payload.participantId, payload.optionIndex, payload.clientTs);
         break;
 
       case 'check_round3_answer':
@@ -117,7 +135,8 @@ export async function POST(req: NextRequest) {
         result = quizStore.submitTieBreakerAnswer(
           payload.participantId,
           payload.optionIndex,
-          payload.timeTakenMs
+          payload.timeTakenMs,
+          payload.clientTs
         );
         break;
 

@@ -71,14 +71,25 @@ export interface TieBreakerQuestion {
   explanation: string;
 }
 
+export interface BuzzRecord {
+  participantId: string;
+  timestamp: number; // effective buzz time in SERVER time (clock-synced client tap, clamped) — used for fair ranking
+  recvTs?: number; // when the buzz packet actually reached the server
+  rttMs?: number; // client-reported round-trip estimate
+  early?: boolean; // tap claimed before the scheduled open — clamped to openAt, flagged for the host
+}
+
 export interface BuzzerState {
   isUnlocked: boolean;
   buzzedParticipantId: string | null;
-  buzzedAt: number | null; // millisecond timestamp
-  buzzHistory: { participantId: string; timestamp: number }[];
+  buzzedAt: number | null; // effective (fair) timestamp of the winning buzz, in server time
+  buzzHistory: BuzzRecord[];
   status: 'IDLE' | 'UNLOCKED' | 'BUZZED' | 'ANSWERED';
   selectedOptionIndex: number | null; // Selected option (0 to 3) before reveal
   selectedAt: number | null;
+  openAtServerTs?: number | null; // scheduled buzzer-open instant in server time — all phones reveal GO together
+  adjudicationEndsAt?: number | null; // brief window collecting near-simultaneous buzzes before a winner is picked
+  contested?: { runnerUpParticipantId: string; marginMs: number } | null; // photo-finish flag for the host
 }
 
 export interface TieBreakerSubmission {
@@ -119,6 +130,7 @@ export interface TieBreakerActiveState {
   submissions: Record<string, TieBreakerSubmission>;
   isCompleted: boolean;
   winnerParticipantId: string | null;
+  openedAtServerTs?: number | null; // when the tie-breaker question officially opened, in server time
 }
 
 export interface QuizRules {
@@ -170,6 +182,7 @@ export interface QuizState {
   // Host URL and Network IP for QR Code scanning
   customHostUrl?: string;
   detectedNetworkIp?: string;
+  serverPort?: string; // actual port the server listens on, so QRs encode the right port
 
   version: number;
   updatedAt: number;

@@ -160,6 +160,7 @@ function QuizAppContent() {
         onSelectSeat={handleSeatSelectedFromModal}
         customHostUrl={state.customHostUrl}
         detectedNetworkIp={state.detectedNetworkIp}
+        serverPort={state.serverPort}
       />
 
       {/* Passcode 108 Authentication Modal */}

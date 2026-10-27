@@ -1,0 +1,141 @@
+{
+  "round1Questions": [
+    {
+      "id": "r1q1",
+      "question": "In which year did Srila Prabhupada board the Jaladuta to travel to America?",
+      "options": ["1955", "1965", "1970", "1975"],
+      "correctAnswer": "1965",
+      "explanation": "Srila Prabhupada boarded the Jaladuta cargo ship in August 1965 at age 69.",
+      "assignedSeat": 1,
+      "category": "Prabhupada Lilā"
+    },
+    {
+      "id": "r1q2",
+      "question": "What is the full name of ISKCON?",
+      "options": [
+        "International Society for Krishna Consciousness",
+        "Indian Society for Krishna Culture",
+        "International School of Krishna Consciousness",
+        "Indian Seva for Krishna Organisation"
+      ],
+      "correctAnswer": "International Society for Krishna Consciousness",
+      "explanation": "ISKCON was incorporated in New York in July 1966.",
+      "assignedSeat": 2,
+      "category": "ISKCON History"
+    },
+    {
+      "id": "r1q3",
+      "question": "Which scripture did Srila Prabhupada translate and comment on, calling it the 'ripened fruit of the tree of Vedic literature'?",
+      "options": ["Bhagavad Gita", "Srimad Bhagavatam", "Chaitanya Charitamrita", "Nectar of Devotion"],
+      "correctAnswer": "Srimad Bhagavatam",
+      "explanation": "Prabhupada described Srimad Bhagavatam as the ripened fruit of the Vedic desire tree.",
+      "assignedSeat": 3,
+      "category": "Shastra"
+    }
+  ],
+  "round2Sets": [
+    {
+      "seatNumber": 1,
+      "questions": [
+        { "id": "r2s1q1", "question": "Name the spiritual master of Srila Prabhupada.", "answer": "Bhaktisiddhanta Sarasvati Thakura" },
+        { "id": "r2s1q2", "question": "How many rounds of the Hare Krishna maha-mantra do initiated devotees chant daily?", "answer": "16" },
+        { "id": "r2s1q3", "question": "In which city did Srila Prabhupada found the first ISKCON temple?", "answer": "New York" },
+        { "id": "r2s1q4", "question": "Which ship carried Srila Prabhupada to America?", "answer": "Jaladuta" },
+        { "id": "r2s1q5", "question": "In which year did Srila Prabhupada pass away?", "answer": "1977" },
+        { "id": "r2s1q6", "question": "Name the ISKCON world headquarters in India.", "answer": "Mayapur" },
+        { "id": "r2s1q7", "question": "Which movement did Lord Chaitanya start 500 years ago?", "answer": "Sankirtan movement" },
+        { "id": "r2s1q8", "question": "How many cantos does Srimad Bhagavatam have?", "answer": "12" },
+        { "id": "r2s1q9", "question": "On which street did ISKCON's first New York temple open?", "answer": "26 Second Avenue" },
+        { "id": "r2s1q10", "question": "In which year was ISKCON incorporated?", "answer": "1966" }
+      ]
+    }
+  ],
+  "round3Questions": [
+    {
+      "id": "r3q1",
+      "question": "Why Dhrtarastra had the fear of losing the battle? (BG 1.1)",
+      "options": [
+        "Because the battle was to take place at dharma-ksetra, which is a place of pilgrimage",
+        "Because pandavas were virtuous by nature",
+        "Both a & b",
+        "None of these"
+      ],
+      "correctOptionIndex": 2,
+      "explanation": "Dhrtarastra feared both the sanctity of the holy place and the virtue of the Pandavas.",
+      "pointsCorrect": 15,
+      "pointsWrong": -5
+    },
+    {
+      "id": "r3q2",
+      "question": "What is the significance of the words dharma-ksetre and kuru-ksetre apart from their historical and Vedic importance? (BG 1.1)",
+      "options": [
+        "In the field of Kuruksetra the father of religion is Krishna",
+        "In the field of Kuruksetra unwanted plants like Dhrtarastra's son Duryodhana and others would be wiped out",
+        "In the field of Kuruksetra religious persons headed by Yudhisthira would be established by the Lord",
+        "All of the above"
+      ],
+      "correctOptionIndex": 3,
+      "explanation": "All three meanings are given in the purport to BG 1.1.",
+      "pointsCorrect": 15,
+      "pointsWrong": -5
+    },
+    {
+      "id": "r3q3",
+      "question": "Why Duryodhana pointed out Dronacarya's mistake in relation to his disciple Dhrstadyumna, the son of Drupada? (BG 1.3)",
+      "options": [
+        "So that Dronacarya is alert and uncompromising in the fighting",
+        "So that Dronacarya is not lenient in the battle against Pandavas",
+        "So that Dronacarya's such leniency if be any, would lead to defeat of Duryodhana's party",
+        "All of the above"
+      ],
+      "correctOptionIndex": 3,
+      "explanation": "Duryodhana wanted Dronacarya alert, non-lenient, and feared leniency would cost him the battle.",
+      "pointsCorrect": 15,
+      "pointsWrong": -5
+    },
+    {
+      "id": "r3q4",
+      "question": "On account of the presence of great warriors on Duryodhana's party like Bhisma and others, what was his conclusion on the result of the battle? (BG 1.9)",
+      "options": [
+        "He was confident of his victory",
+        "He was also doubtful of his victory like his father",
+        "He had no opinion",
+        "None of these"
+      ],
+      "correctOptionIndex": 1,
+      "explanation": "'Aparyaptam tad asmakam balam' — despite Bhisma, he harboured doubt like his father.",
+      "pointsCorrect": 15,
+      "pointsWrong": -5
+    },
+    {
+      "id": "r3q5",
+      "question": "Duryodhana after praising Bhisma as a far superior general, why asks others to support him? (BG 1.11)",
+      "options": [
+        "Because he wanted everyone to feel important",
+        "Because he didn't wanted anyone to be felt neglected",
+        "Both a & b",
+        "None of these"
+      ],
+      "correctOptionIndex": 2,
+      "explanation": "He wanted each commander to feel important and none neglected in defending Bhisma.",
+      "pointsCorrect": 15,
+      "pointsWrong": -5
+    }
+  ],
+  "tieBreakerQuestions": [
+    {
+      "id": "tbq1",
+      "question": "In which year was ISKCON registered in New York?",
+      "options": ["1965", "1966", "1967", "1968"],
+      "correctOptionIndex": 1,
+      "explanation": "ISKCON was incorporated on 13 July 1966."
+    },
+    {
+      "id": "tbq2",
+      "question": "Who asked the first question of Bhagavad-gita — 'kim akurvata'?",
+      "options": ["Sanjaya", "Dhrtarastra", "Duryodhana", "Vidura"],
+      "correctOptionIndex": 1,
+      "explanation": "Dhrtarastra asks Sanjaya what his sons and the Pandavas did at Kuruksetra (BG 1.1)."
+    }
+  ]
+}

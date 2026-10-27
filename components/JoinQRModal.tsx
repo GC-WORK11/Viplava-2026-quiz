@@ -13,6 +13,7 @@ interface JoinQRModalProps {
   onSelectSeat?: (seat: number) => void;
   customHostUrl?: string;
   detectedNetworkIp?: string;
+  serverPort?: string;
 }
 
 const subscribeOrigin = () => () => {};
@@ -26,13 +27,15 @@ export function JoinQRModal({
   onSelectSeat,
   customHostUrl,
   detectedNetworkIp,
+  serverPort,
 }: JoinQRModalProps) {
   const [copied, setCopied] = useState(false);
   const currentOrigin = React.useSyncExternalStore(subscribeOrigin, getOriginSnapshot, getOriginServerSnapshot);
   const { joinUrl, displayAddress } = resolveParticipantJoinUrl(
     currentOrigin,
     customHostUrl,
-    detectedNetworkIp
+    detectedNetworkIp,
+    serverPort
   );
 
   if (!isOpen) return null;

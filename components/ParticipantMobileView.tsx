@@ -12,6 +12,7 @@ import {
 } from 'lucide-react';
 import { QuizState } from '@/lib/types';
 import { soundManager } from '@/lib/soundEffects';
+import { serverNow, getRttMs, isClockSynced } from '@/lib/clockSync';
 
 interface ParticipantMobileViewProps {
   state: QuizState;
@@ -154,9 +155,32 @@ export function ParticipantMobileView({ state, executeAction, forcedSeat }: Part
   const participant = participants.find((p) => p.seatNumber === selectedSeat);
   const participantId = participant?.id || `p${selectedSeat}`;
 
+  // Synchronized buzzer gate: the server schedules the buzzer-open instant in
+  // ITS clock (openAtServerTs). Every synced phone reveals "BUZZ IN!" at the
+  // same absolute instant — no phone gets an earlier GO from network jitter.
+  const [syncedNow, setSyncedNow] = useState(() => serverNow());
+  useEffect(() => {
+    const openAt = buzzerState.openAtServerTs;
+    if (!buzzerState.isUnlocked || openAt == null || serverNow() >= openAt) {
+      setSyncedNow(serverNow());
+      return;
+    }
+    const id = setInterval(() => {
+      if (serverNow() >= openAt) {
+        setSyncedNow(serverNow());
+        clearInterval(id);
+      }
+    }, 20);
+    return () => clearInterval(id);
+  }, [buzzerState.isUnlocked, buzzerState.openAtServerTs]);
+
+  const buzzerOpen =
+    buzzerState.isUnlocked &&
+    (buzzerState.openAtServerTs == null || syncedNow >= buzzerState.openAtServerTs);
+
   // Buzzer action handler
   const handlePressBuzzer = async () => {
-    if (!buzzerState.isUnlocked) return;
+    if (!buzzerOpen) return;
 
     if (typeof window !== 'undefined' && 'vibrate' in navigator) {
       try {
@@ -167,7 +191,9 @@ export function ParticipantMobileView({ state, executeAction, forcedSeat }: Part
     }
 
     soundManager.playBuzzer();
-    await executeAction('press_buzzer', { participantId });
+    // clientTs is the tap time expressed in SERVER time via clock sync —
+    // the server ranks buzzes by this, not by packet arrival order.
+    await executeAction('press_buzzer', { participantId, clientTs: serverNow(), rttMs: getRttMs() });
   };
 
   const [isSubmittingAnswer, setIsSubmittingAnswer] = useState(false);
@@ -175,7 +201,7 @@ export function ParticipantMobileView({ state, executeAction, forcedSeat }: Part
   // Option select handler for Round 3
   const handleSelectBuzzerOption = async (optionIndex: number) => {
     if (round3State.isAnswerRevealed) return;
-    await executeAction('select_buzzer_option', { participantId, optionIndex });
+    await executeAction('select_buzzer_option', { participantId, optionIndex, clientTs: serverNow() });
   };
 
   // Option select handler for Round 1
@@ -438,7 +464,10 @@ export function ParticipantMobileView({ state, executeAction, forcedSeat }: Part
               </p>
               <div className="p-2.5 rounded-xl bg-black/40 border border-emerald-500/30 text-emerald-300 text-xs font-semibold flex items-center justify-center gap-2">
                 <Radio className="w-4 h-4 text-emerald-400 animate-pulse" />
-                <span>Connected &amp; Ready</span>
+                <span>
+                  Connected &amp; Ready
+                  {isClockSynced() && <span className="text-emerald-400/70"> • Sync ±{getRttMs()}ms</span>}
+                </span>
               </div>
             </div>
           )}
@@ -611,19 +640,19 @@ export function ParticipantMobileView({ state, executeAction, forcedSeat }: Part
                   <div className="flex flex-col items-center justify-center py-2">
                     <button
                       onClick={handlePressBuzzer}
-                      disabled={!buzzerState.isUnlocked}
+                      disabled={!buzzerOpen}
                       className={`w-52 h-52 sm:w-56 sm:h-56 rounded-full flex flex-col items-center justify-center select-none touch-manipulation relative active:scale-95 transition-all ${
-                        buzzerState.isUnlocked
+                        buzzerOpen
                           ? 'bg-gradient-to-b from-amber-500 via-yellow-500 to-amber-600 text-black shadow-[0_0_40px_rgba(245,158,11,0.6)] border-8 border-amber-300 animate-pulse-glow cursor-pointer'
                           : 'bg-gradient-to-b from-[#2b183a] to-[#160d1f] text-amber-400/30 border-8 border-purple-900/40 opacity-70 cursor-not-allowed'
                       }`}
                     >
-                      <Zap className={`w-12 h-12 mb-1 ${buzzerState.isUnlocked ? 'text-black' : 'text-amber-500/30'}`} />
+                      <Zap className={`w-12 h-12 mb-1 ${buzzerOpen ? 'text-black' : 'text-amber-500/30'}`} />
                       <span className="font-cinzel font-black text-2xl tracking-wider">
-                        {buzzerState.isUnlocked ? 'BUZZ IN!' : 'LOCKED'}
+                        {buzzerOpen ? 'BUZZ IN!' : buzzerState.isUnlocked ? 'READY…' : 'LOCKED'}
                       </span>
                       <span className="text-[10px] font-bold uppercase tracking-widest mt-1 opacity-90">
-                        {buzzerState.isUnlocked ? 'Tap fast to answer' : 'Wait for Host unlock'}
+                        {buzzerOpen ? 'Tap fast to answer' : buzzerState.isUnlocked ? 'Opening…' : 'Wait for Host unlock'}
                       </span>
                     </button>
                   </div>
@@ -752,7 +781,7 @@ export function ParticipantMobileView({ state, executeAction, forcedSeat }: Part
                           executeAction('submit_tie_breaker_answer', {
                             participantId,
                             optionIndex: idx,
-                            timeTakenMs: 1500,
+                            clientTs: serverNow(),
                           })
                         }
                         className="p-3 rounded-xl bg-black/40 hover:bg-cyan-950 border border-cyan-500/30 text-cyan-200 text-xs text-left font-semibold"

@@ -1,20 +1,69 @@
 import os from 'os';
-import { QuizState, QuizPhase, Participant, QuestionRound1, RapidFireSet, BuzzerQuestion, TieBreakerQuestion, QuizRules } from './types';
+import fs from 'fs';
+import path from 'path';
+import { QuizState, QuizPhase, Participant, QuestionRound1, RapidFireSet, BuzzerQuestion, TieBreakerQuestion, QuizRules, BuzzRecord } from './types';
 import { INITIAL_QUIZ_STATE } from './defaultData';
+
+// How long after the first buzz the server keeps collecting buzzes before
+// deciding the winner. ~80ms is imperceptible to humans but lets near-
+// simultaneous taps be ranked by their synced timestamps, not arrival order.
+const BUZZ_ADJUDICATION_MS = 80;
+// If the top two buzzes are within this window it's declared a photo-finish.
+const BUZZ_TIE_MS = 15;
+// Round durations in seconds — production defaults, overridable via env
+// (the test launcher sets these high so nothing times out mid-demo).
+const T_R1 = Number(process.env.QUIZ_R1_SECONDS ?? 30);
+const T_PASS = Number(process.env.QUIZ_PASS_SECONDS ?? 15);
+const T_R2 = Number(process.env.QUIZ_R2_SECONDS ?? 60);
+const T_R3 = Number(process.env.QUIZ_R3_SECONDS ?? 30);
+const T_TB = Number(process.env.QUIZ_TB_SECONDS ?? 20);
+// Buzzer "GO" is scheduled this far ahead so every phone reveals the open
+// buzzer at the same absolute instant regardless of network jitter.
+const BUZZ_OPEN_DELAY_MS = 250;
+const TB_OPEN_DELAY_MS = 300;
+// Client timestamps older than this are treated as untrustworthy and ignored.
+const MAX_CLIENT_TS_SKEW_MS = 60_000;
+// State durability is enabled only for real event runs (start-event.sh sets
+// QUIZ_PERSIST=1) so tests/dev runs never contaminate each other via the file.
+const PERSIST_ENABLED = process.env.QUIZ_PERSIST === '1';
+const STATE_FILE = process.env.QUIZ_STATE_FILE || path.join(process.cwd(), 'quiz-state.json');
+
+function scoreIpv4Candidate(addr: string): number {
+  if (addr.startsWith('192.168.')) return 3;
+  if (addr.startsWith('10.')) return 2;
+  if (/^172\.(1[6-9]|2[0-9]|3[0-1])\./.test(addr)) return 1;
+  return 0;
+}
 
 function detectLocalNetworkIp(): string | null {
   try {
     const interfaces = os.networkInterfaces();
+    const candidates: { addr: string; score: number }[] = [];
     for (const name of Object.keys(interfaces)) {
       for (const net of interfaces[name] || []) {
-        if (net.family === 'IPv4' && !net.internal && net.address) {
-          if (!net.address.startsWith('127.')) {
-            return net.address;
-          }
+        if (net.family === 'IPv4' && !net.internal && net.address && !net.address.startsWith('127.')) {
+          candidates.push({ addr: net.address, score: scoreIpv4Candidate(net.address) });
         }
       }
     }
+    candidates.sort((a, b) => b.score - a.score);
+    return candidates[0]?.addr ?? null;
   } catch {}
+  return null;
+}
+
+function loadPersistedState(): QuizState | null {
+  if (!PERSIST_ENABLED || process.env.QUIZ_SKIP_RESTORE === '1') return null;
+  try {
+    if (fs.existsSync(STATE_FILE)) {
+      const parsed = JSON.parse(fs.readFileSync(STATE_FILE, 'utf-8')) as QuizState;
+      if (parsed && Array.isArray(parsed.participants)) {
+        return parsed;
+      }
+    }
+  } catch {
+    // Corrupt or missing file -> start fresh
+  }
   return null;
 }
 
@@ -23,14 +72,23 @@ declare global {
   var __GLOBAL_QUIZ_STATE__: QuizState | undefined;
   var __QUIZ_LISTENERS__: Set<(state: QuizState) => void> | undefined;
   var __TIMER_INTERVAL__: NodeJS.Timeout | undefined;
+  var __BUZZ_ADJ_TIMEOUT__: NodeJS.Timeout | undefined;
+  var __PENDING_BUZZ_OPTIONS__: Record<string, number> | undefined;
+  var __STATE_SAVE_TIMEOUT__: NodeJS.Timeout | undefined;
+}
+
+if (!global.__PENDING_BUZZ_OPTIONS__) {
+  global.__PENDING_BUZZ_OPTIONS__ = {};
 }
 
 if (!global.__GLOBAL_QUIZ_STATE__) {
-  const initialState: QuizState = JSON.parse(JSON.stringify(INITIAL_QUIZ_STATE));
+  const restored = loadPersistedState();
+  const initialState: QuizState = restored ?? JSON.parse(JSON.stringify(INITIAL_QUIZ_STATE));
   const detected = detectLocalNetworkIp();
   if (detected) {
     initialState.detectedNetworkIp = detected;
   }
+  initialState.serverPort = process.env.PORT || '3000';
   global.__GLOBAL_QUIZ_STATE__ = initialState;
 } else {
   // Ensure default uncheck state
@@ -67,8 +125,8 @@ if (!global.__TIMER_INTERVAL__) {
               state.round1State.passCount = 1;
               state.round1State.status = 'PASSED';
               state.round1State.selectedOptionIndex = null;
-              state.timer.secondsLeft = 15;
-              state.timer.initialSeconds = 15;
+              state.timer.secondsLeft = T_PASS;
+              state.timer.initialSeconds = T_PASS;
               state.timer.isRunning = true;
             } else {
               // Pass question timed out -> reveal answer
@@ -78,6 +136,9 @@ if (!global.__TIMER_INTERVAL__) {
           } else if (state.phase === 'ROUND_2_ACTIVE') {
             state.round2State.isCompleted = true;
           } else if (state.phase === 'ROUND_3_ACTIVE') {
+            if (state.buzzerState.adjudicationEndsAt) {
+              finalizeBuzzerAdjudication();
+            }
             state.buzzerState.isUnlocked = false;
           }
         }
@@ -88,10 +149,106 @@ if (!global.__TIMER_INTERVAL__) {
   }, 1000);
 }
 
+function persistStateDebounced() {
+  if (!PERSIST_ENABLED) return;
+  if (global.__STATE_SAVE_TIMEOUT__) {
+    clearTimeout(global.__STATE_SAVE_TIMEOUT__);
+  }
+  global.__STATE_SAVE_TIMEOUT__ = setTimeout(() => {
+    try {
+      fs.writeFileSync(STATE_FILE, JSON.stringify(global.__GLOBAL_QUIZ_STATE__));
+    } catch {
+      // Disk write failure is non-fatal for gameplay
+    }
+  }, 400);
+}
+
+// Freshly-unlocked buzzer state with a scheduled open instant in server time.
+function freshUnlockedBuzzer() {
+  clearBuzzAdjudication();
+  global.__PENDING_BUZZ_OPTIONS__ = {};
+  return {
+    isUnlocked: true,
+    buzzedParticipantId: null,
+    buzzedAt: null,
+    buzzHistory: [],
+    status: 'UNLOCKED' as const,
+    selectedOptionIndex: null,
+    selectedAt: null,
+    openAtServerTs: Date.now() + BUZZ_OPEN_DELAY_MS,
+    adjudicationEndsAt: null,
+    contested: null,
+  };
+}
+
+function clearBuzzAdjudication() {
+  if (global.__BUZZ_ADJ_TIMEOUT__) {
+    clearTimeout(global.__BUZZ_ADJ_TIMEOUT__);
+    global.__BUZZ_ADJ_TIMEOUT__ = undefined;
+  }
+}
+
+// Convert a client-reported tap timestamp (already in server time via clock
+// sync) into a fair effective timestamp. Clamped so a buzz can never claim to
+// be in the future or pre-date the scheduled buzzer-open instant.
+function effectiveBuzzTs(
+  clientTs: number | undefined,
+  recvTs: number,
+  openAt: number | null | undefined
+): { effective: number; early: boolean } {
+  let effective = recvTs;
+  let early = false;
+  if (typeof clientTs === 'number' && Number.isFinite(clientTs)) {
+    effective = Math.min(Math.max(clientTs, recvTs - MAX_CLIENT_TS_SKEW_MS), recvTs);
+  }
+  if (openAt && effective < openAt) {
+    effective = openAt;
+    early = true;
+  }
+  return { effective, early };
+}
+
+// After the adjudication window closes, rank buzzes by their synced effective
+// timestamps — NOT by packet arrival order — and flag photo-finishes.
+function finalizeBuzzerAdjudication() {
+  const state = global.__GLOBAL_QUIZ_STATE__;
+  if (!state) return;
+  clearBuzzAdjudication();
+  state.buzzerState.adjudicationEndsAt = null;
+
+  const hist = state.buzzerState.buzzHistory;
+  if (hist.length === 0 || state.buzzerState.buzzedParticipantId) {
+    broadcastChange();
+    return;
+  }
+
+  const sorted = [...hist].sort((a, b) => a.timestamp - b.timestamp);
+  const winner = sorted[0];
+  const runnerUp = sorted[1];
+
+  state.buzzerState.buzzedParticipantId = winner.participantId;
+  state.buzzerState.buzzedAt = winner.timestamp;
+  state.buzzerState.isUnlocked = false;
+  state.buzzerState.status = 'BUZZED';
+  state.buzzerState.contested =
+    runnerUp && runnerUp.timestamp - winner.timestamp <= BUZZ_TIE_MS
+      ? { runnerUpParticipantId: runnerUp.participantId, marginMs: runnerUp.timestamp - winner.timestamp }
+      : null;
+
+  const pendingOpt = global.__PENDING_BUZZ_OPTIONS__?.[winner.participantId];
+  if (pendingOpt !== undefined) {
+    state.buzzerState.selectedOptionIndex = pendingOpt;
+    state.buzzerState.selectedAt = Date.now();
+  }
+  state.timer.isRunning = false;
+  broadcastChange();
+}
+
 function broadcastChange() {
   if (global.__GLOBAL_QUIZ_STATE__) {
     global.__GLOBAL_QUIZ_STATE__.version += 1;
     global.__GLOBAL_QUIZ_STATE__.updatedAt = Date.now();
+    persistStateDebounced();
     const cloned = JSON.parse(JSON.stringify(global.__GLOBAL_QUIZ_STATE__));
     global.__QUIZ_LISTENERS__?.forEach((cb) => {
       try {
@@ -121,20 +278,18 @@ export const quizStore = {
 
     // Reset timer according to phase defaults - automatically start on active rounds
     if (phase === 'ROUND_1_ACTIVE') {
-      state.timer.initialSeconds = 30;
-      state.timer.secondsLeft = 30;
+      state.timer.initialSeconds = T_R1;
+      state.timer.secondsLeft = T_R1;
       state.timer.isRunning = true;
     } else if (phase === 'ROUND_2_ACTIVE') {
-      state.timer.initialSeconds = 60;
-      state.timer.secondsLeft = 60;
+      state.timer.initialSeconds = T_R2;
+      state.timer.secondsLeft = T_R2;
       state.timer.isRunning = true;
     } else if (phase === 'ROUND_3_ACTIVE') {
-      state.timer.initialSeconds = 30;
-      state.timer.secondsLeft = 30;
+      state.timer.initialSeconds = T_R3;
+      state.timer.secondsLeft = T_R3;
       state.timer.isRunning = true;
-      state.buzzerState.isUnlocked = true;
-      state.buzzerState.buzzedParticipantId = null;
-      state.buzzerState.status = 'UNLOCKED';
+      state.buzzerState = freshUnlockedBuzzer();
     } else {
       state.timer.isRunning = false;
     }
@@ -167,8 +322,8 @@ export const quizStore = {
       selectedOptionIndex: null,
       status: 'DIRECT',
     };
-    state.timer.secondsLeft = 30;
-    state.timer.initialSeconds = 30;
+    state.timer.secondsLeft = T_R1;
+    state.timer.initialSeconds = T_R1;
     // Auto-start clock timer automatically when question appears
     state.timer.isRunning = true;
 
@@ -197,8 +352,8 @@ export const quizStore = {
     state.round1State.isPassed = true;
     state.round1State.passCount = 1;
     state.round1State.status = 'PASSED';
-    state.timer.secondsLeft = 15; // 15 seconds for pass
-    state.timer.initialSeconds = 15;
+    state.timer.secondsLeft = T_PASS;
+    state.timer.initialSeconds = T_PASS;
     state.timer.isRunning = true;
 
     broadcastChange();
@@ -255,8 +410,8 @@ export const quizStore = {
         state.round1State.status = 'PASSED';
         state.round1State.selectedOptionIndex = null;
         state.round1State.isAnswerRevealed = false;
-        state.timer.secondsLeft = 15;
-        state.timer.initialSeconds = 15;
+        state.timer.secondsLeft = T_PASS;
+        state.timer.initialSeconds = T_PASS;
         state.timer.isRunning = true;
       } else {
         // Passed and wrong: mark as wrong, do not reveal so host can click Reveal Answer
@@ -300,8 +455,8 @@ export const quizStore = {
         state.round1State.status = 'PASSED';
         state.round1State.selectedOptionIndex = null;
         state.round1State.isAnswerRevealed = false;
-        state.timer.secondsLeft = 15;
-        state.timer.initialSeconds = 15;
+        state.timer.secondsLeft = T_PASS;
+        state.timer.initialSeconds = T_PASS;
         state.timer.isRunning = true;
       } else {
         state.round1State.isAnswerRevealed = false;
@@ -334,8 +489,8 @@ export const quizStore = {
     state.round1State.isAnswerRevealed = false;
     state.round1State.selectedOptionIndex = null;
     state.round1State.status = 'DIRECT';
-    state.timer.secondsLeft = 30;
-    state.timer.initialSeconds = 30;
+    state.timer.secondsLeft = T_R1;
+    state.timer.initialSeconds = T_R1;
     state.timer.isRunning = true;
 
     broadcastChange();
@@ -353,8 +508,8 @@ export const quizStore = {
       answers: [],
       isCompleted: false,
     };
-    state.timer.secondsLeft = 60;
-    state.timer.initialSeconds = 60;
+    state.timer.secondsLeft = T_R2;
+    state.timer.initialSeconds = T_R2;
     // Auto-start clock timer automatically when rapid fire begins
     state.timer.isRunning = true;
 
@@ -405,17 +560,9 @@ export const quizStore = {
     state.round3State.isAnswerRevealed = false;
 
     // Automatically unlock buzzer and start timer when question appears
-    state.buzzerState = {
-      isUnlocked: true,
-      buzzedParticipantId: null,
-      buzzedAt: null,
-      buzzHistory: [],
-      status: 'UNLOCKED',
-      selectedOptionIndex: null,
-      selectedAt: null,
-    };
-    state.timer.secondsLeft = 30;
-    state.timer.initialSeconds = 30;
+    state.buzzerState = freshUnlockedBuzzer();
+    state.timer.secondsLeft = T_R3;
+    state.timer.initialSeconds = T_R3;
     state.timer.isRunning = true;
 
     broadcastChange();
@@ -481,12 +628,7 @@ export const quizStore = {
 
   unlockBuzzer: () => {
     const state = global.__GLOBAL_QUIZ_STATE__!;
-    state.buzzerState.isUnlocked = true;
-    state.buzzerState.buzzedParticipantId = null;
-    state.buzzerState.buzzedAt = null;
-    state.buzzerState.selectedOptionIndex = null;
-    state.buzzerState.selectedAt = null;
-    state.buzzerState.status = 'UNLOCKED';
+    state.buzzerState = freshUnlockedBuzzer();
     state.timer.isRunning = true;
 
     broadcastChange();
@@ -495,6 +637,10 @@ export const quizStore = {
 
   lockBuzzer: () => {
     const state = global.__GLOBAL_QUIZ_STATE__!;
+    // If host locks mid-adjudication, settle the pending buzzes first
+    if (state.buzzerState.adjudicationEndsAt) {
+      finalizeBuzzerAdjudication();
+    }
     state.buzzerState.isUnlocked = false;
     if (state.buzzerState.status === 'UNLOCKED') {
       state.buzzerState.status = 'IDLE';
@@ -503,19 +649,26 @@ export const quizStore = {
     return quizStore.getState();
   },
 
-  selectBuzzerOption: (participantId: string, optionIndex: number) => {
+  selectBuzzerOption: (participantId: string, optionIndex: number, clientTs?: number) => {
     const state = global.__GLOBAL_QUIZ_STATE__!;
-    state.buzzerState.selectedOptionIndex = optionIndex;
-    state.buzzerState.selectedAt = Date.now();
+
     if (!state.buzzerState.buzzedParticipantId) {
-      state.buzzerState.buzzedParticipantId = participantId;
-      state.buzzerState.status = 'BUZZED';
+      // An option tap before any winner counts as a buzz attempt too:
+      // queue it for fair adjudication and remember the option in case
+      // this participant wins.
+      global.__PENDING_BUZZ_OPTIONS__![participantId] = optionIndex;
+      return quizStore.pressBuzzer(participantId, clientTs);
+    }
+
+    if (state.buzzerState.buzzedParticipantId === participantId) {
+      state.buzzerState.selectedOptionIndex = optionIndex;
+      state.buzzerState.selectedAt = Date.now();
     }
     broadcastChange();
     return quizStore.getState();
   },
 
-  pressBuzzer: (participantId: string) => {
+  pressBuzzer: (participantId: string, clientTs?: number, clientRttMs?: number) => {
     const state = global.__GLOBAL_QUIZ_STATE__!;
     const now = Date.now();
 
@@ -523,7 +676,9 @@ export const quizStore = {
       return { success: false, reason: 'Round is currently paused by the Host' };
     }
 
-    if (!state.buzzerState.isUnlocked) {
+    const windowOpen = state.buzzerState.isUnlocked || !!state.buzzerState.adjudicationEndsAt;
+
+    if (!windowOpen) {
       return {
         success: false,
         reason: state.buzzerState.buzzedParticipantId ? 'Another participant buzzed in first' : 'Buzzer is currently locked',
@@ -531,29 +686,27 @@ export const quizStore = {
       };
     }
 
-    // Atomic first lock
-    if (state.buzzerState.buzzedParticipantId === null) {
-      state.buzzerState.buzzedParticipantId = participantId;
-      state.buzzerState.buzzedAt = now;
-      state.buzzerState.isUnlocked = false; // Lock out others
-      state.buzzerState.status = 'BUZZED';
-      state.buzzerState.selectedOptionIndex = null;
-      state.buzzerState.selectedAt = null;
-      state.buzzerState.buzzHistory.push({ participantId, timestamp: now });
-      state.timer.isRunning = false;
-
-      broadcastChange();
-      return { success: true, buzzedFirst: true, buzzedAt: now };
+    // One record per participant — their FIRST tap is what counts.
+    if (state.buzzerState.buzzHistory.some((b) => b.participantId === participantId)) {
+      return { success: true, pending: true, alreadyRecorded: true };
     }
 
-    // Already buzzed by someone else, record in history
-    state.buzzerState.buzzHistory.push({ participantId, timestamp: now });
-    return {
-      success: false,
-      reason: 'Another participant buzzed in first',
-      buzzedBy: state.buzzerState.buzzedParticipantId,
-      timeDifferenceMs: now - (state.buzzerState.buzzedAt || now),
-    };
+    const { effective, early } = effectiveBuzzTs(clientTs, now, state.buzzerState.openAtServerTs);
+    const record: BuzzRecord = { participantId, timestamp: effective, recvTs: now };
+    if (typeof clientRttMs === 'number') record.rttMs = clientRttMs;
+    if (early) record.early = true;
+    state.buzzerState.buzzHistory.push(record);
+
+    // Open (or keep open) a short adjudication window so that buzzes which are
+    // truly simultaneous get ranked by synced timestamp — not by which packet
+    // happened to reach the laptop first.
+    if (!state.buzzerState.adjudicationEndsAt) {
+      state.buzzerState.adjudicationEndsAt = now + BUZZ_ADJUDICATION_MS;
+      global.__BUZZ_ADJ_TIMEOUT__ = setTimeout(finalizeBuzzerAdjudication, BUZZ_ADJUDICATION_MS);
+    }
+
+    broadcastChange();
+    return { success: true, pending: true };
   },
 
   markBuzzerAnswer: (isCorrect: boolean) => {
@@ -643,17 +796,9 @@ export const quizStore = {
   resetRound3QuestionAttempt: () => {
     const state = global.__GLOBAL_QUIZ_STATE__!;
     state.round3State.isAnswerRevealed = false;
-    state.buzzerState = {
-      isUnlocked: true,
-      buzzedParticipantId: null,
-      buzzedAt: null,
-      buzzHistory: [],
-      status: 'UNLOCKED',
-      selectedOptionIndex: null,
-      selectedAt: null,
-    };
-    state.timer.secondsLeft = 30;
-    state.timer.initialSeconds = 30;
+    state.buzzerState = freshUnlockedBuzzer();
+    state.timer.secondsLeft = T_R3;
+    state.timer.initialSeconds = T_R3;
     state.timer.isRunning = true;
 
     broadcastChange();
@@ -669,28 +814,42 @@ export const quizStore = {
       submissions: {},
       isCompleted: false,
       winnerParticipantId: null,
+      openedAtServerTs: Date.now() + TB_OPEN_DELAY_MS,
     };
-    state.timer.secondsLeft = 20;
-    state.timer.initialSeconds = 20;
+    state.timer.secondsLeft = T_TB;
+    state.timer.initialSeconds = T_TB;
     state.timer.isRunning = true;
 
     broadcastChange();
     return quizStore.getState();
   },
 
-  submitTieBreakerAnswer: (participantId: string, optionIndex: number, timeTakenMs: number) => {
+  submitTieBreakerAnswer: (participantId: string, optionIndex: number, timeTakenMs: number, clientTs?: number) => {
     const state = global.__GLOBAL_QUIZ_STATE__!;
     const question = state.tieBreakerQuestions[state.tieBreakerState.currentQuestionIndex];
     if (!question) return quizStore.getState();
 
     const isCorrect = optionIndex === question.correctOptionIndex;
 
+    // Prefer a server-computed duration: clock-synced client tap timestamp
+    // minus the scheduled question-open instant. Falls back to the client's
+    // self-reported timeTakenMs, then to time-since-receipt.
+    const now = Date.now();
+    let measuredMs = timeTakenMs;
+    const openedAt = state.tieBreakerState.openedAtServerTs;
+    if (typeof clientTs === 'number' && Number.isFinite(clientTs) && openedAt) {
+      const tapTs = Math.min(Math.max(clientTs, now - MAX_CLIENT_TS_SKEW_MS), now);
+      measuredMs = Math.max(0, Math.round(tapTs - openedAt));
+    } else if (typeof measuredMs !== 'number' || !Number.isFinite(measuredMs)) {
+      measuredMs = openedAt ? Math.max(0, now - openedAt) : 0;
+    }
+
     state.tieBreakerState.submissions[participantId] = {
       participantId,
       selectedOptionIndex: optionIndex,
-      timeTakenMs,
+      timeTakenMs: measuredMs,
       isCorrect,
-      submittedAt: Date.now(),
+      submittedAt: now,
     };
 
     // Check if all tied participants have submitted or calculate winner
@@ -770,6 +929,15 @@ export const quizStore = {
     return quizStore.getState();
   },
 
+  // Recorded from incoming request Host headers — used for QR join URLs.
+  setServerPort: (port: string) => {
+    const state = global.__GLOBAL_QUIZ_STATE__!;
+    if (state.serverPort !== port) {
+      state.serverPort = port;
+      broadcastChange();
+    }
+  },
+
   resetCheckIns: () => {
     const state = global.__GLOBAL_QUIZ_STATE__!;
     state.participants.forEach((p) => {
@@ -797,6 +965,7 @@ export const quizStore = {
       }
       if (state.phase === 'ROUND_3_ACTIVE' && !state.round3State.isAnswerRevealed && !state.buzzerState.buzzedParticipantId) {
         state.buzzerState.isUnlocked = true;
+        state.buzzerState.openAtServerTs = Date.now() + BUZZ_OPEN_DELAY_MS;
       }
     }
 

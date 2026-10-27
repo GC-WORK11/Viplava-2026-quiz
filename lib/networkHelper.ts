@@ -1,7 +1,8 @@
 export function resolveParticipantJoinUrl(
   browserOrigin: string,
   stateCustomHostUrl?: string,
-  stateDetectedNetworkIp?: string
+  stateDetectedNetworkIp?: string,
+  stateServerPort?: string
 ): { joinUrl: string; isLocalhost: boolean; displayAddress: string } {
   // 1. If the host has explicitly configured a custom URL (e.g. http://192.168.1.50:3000)
   if (stateCustomHostUrl && stateCustomHostUrl.trim().length > 0) {
@@ -28,9 +29,11 @@ export function resolveParticipantJoinUrl(
     hostname === '0.0.0.0' ||
     hostname === '';
 
-  // 3. If accessing via localhost on host computer and we detected the Wi-Fi Network IP
+  // 3. If accessing via localhost (or a local tunnel/preview proxy) on the host
+  // computer, point phones at the detected LAN IP on the REAL server port —
+  // never the proxy/tunnel port from the browser URL, which doesn't exist on LAN.
   if (isLocalhost && stateDetectedNetworkIp) {
-    const targetPort = port || ':3000';
+    const targetPort = stateServerPort ? `:${stateServerPort}` : port || ':3000';
     const baseUrl = `http://${stateDetectedNetworkIp}${targetPort}`;
     return {
       joinUrl: `${baseUrl}/?view=participant`,
@@ -50,9 +53,10 @@ export function resolveParticipantJoinUrl(
 
   // 5. Default fallback
   const fallbackIp = stateDetectedNetworkIp || '192.168.1.x';
+  const fallbackPort = stateServerPort || '3000';
   return {
-    joinUrl: `http://${fallbackIp}:3000/?view=participant`,
+    joinUrl: `http://${fallbackIp}:${fallbackPort}/?view=participant`,
     isLocalhost: true,
-    displayAddress: `http://${fallbackIp}:3000`,
+    displayAddress: `http://${fallbackIp}:${fallbackPort}`,
   };
 }

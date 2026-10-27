@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { QuizState } from '@/lib/types';
 import { INITIAL_QUIZ_STATE } from '@/lib/defaultData';
+import { startClockSync } from '@/lib/clockSync';
 
 export function useQuizSync() {
   const [state, setState] = useState<QuizState>(INITIAL_QUIZ_STATE);
@@ -10,30 +11,43 @@ export function useQuizSync() {
   const [isLoading, setIsLoading] = useState(true);
   const broadcastChannelRef = useRef<BroadcastChannel | null>(null);
 
-  // Apply state update if newer version
+  // Apply state update only when something actually changed — returning the
+  // same `prev` reference lets React skip re-rendering entirely, so background
+  // polls/SSE stay invisible to the user instead of flickering the UI.
   const updateStateIfNewer = useCallback((newState: QuizState) => {
     setState((prev) => {
-      if (newState.version >= prev.version || newState.updatedAt > prev.updatedAt) {
+      if (newState.version > prev.version || newState.updatedAt > prev.updatedAt) {
         return newState;
       }
       return prev;
     });
   }, []);
 
+  const failCountRef = useRef(0);
+
   // Fetch state manually
   const fetchState = useCallback(async () => {
     try {
-      const res = await fetch('/api/quiz', { cache: 'no-store' });
+      // 3.5s timeout: on a half-dead WiFi link a fetch can hang for the OS TCP
+      // timeout (tens of seconds) and stall all updates. Fail fast, let the
+      // next poll/SSE reconnect recover.
+      const res = await fetch('/api/quiz', {
+        cache: 'no-store',
+        signal: AbortSignal.timeout(3500),
+      });
       if (res.ok) {
         const json = await res.json();
         if (json.success && json.state) {
           updateStateIfNewer(json.state);
+          failCountRef.current = 0;
           setIsConnected(true);
         }
       }
     } catch (e) {
       console.warn('Fetch quiz state failed:', e);
-      setIsConnected(false);
+      // Tolerate a transient failure — only show "Connecting..." after 2+
+      // consecutive misses so one hiccup doesn't flash the badge/UI.
+      if (++failCountRef.current >= 2) setIsConnected(false);
     } finally {
       setIsLoading(false);
     }
@@ -68,6 +82,9 @@ export function useQuizSync() {
   );
 
   useEffect(() => {
+    // 0. Sync this device's clock to the server for fair buzzer timing
+    startClockSync();
+
     // 1. Initial fetch asynchronously
     const initialTimer = setTimeout(() => {
       void fetchState();
@@ -97,6 +114,9 @@ export function useQuizSync() {
 
       eventSource.onopen = () => {
         setIsConnected(true);
+        // Re-sync the clock on every (re)connect — after a WiFi drop the
+        // offset estimate may be stale and buzzer fairness depends on it.
+        startClockSync();
       };
 
       eventSource.onmessage = (e) => {
@@ -117,8 +137,10 @@ export function useQuizSync() {
       console.warn('SSE not supported or failed to init', e);
     }
 
-    // 4. Polling fallback every 1200ms
+    // 4. Polling backstop every 1200ms — only fires when SSE isn't live,
+    //    otherwise it doubles traffic for zero benefit on a fragile link.
     fallbackInterval = setInterval(() => {
+      if (eventSource && eventSource.readyState === EventSource.OPEN) return;
       fetchState();
     }, 1200);
 

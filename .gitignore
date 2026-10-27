@@ -5,3 +5,7 @@ coverage/
 *.log
 .env*
 !.env.example
+quiz-state.json
+testing/quiz-test-state.json
+tsconfig.tsbuildinfo
+testing/.quiz-test.pid

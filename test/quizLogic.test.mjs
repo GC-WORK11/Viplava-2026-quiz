@@ -2,6 +2,10 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { quizStore } from '../lib/quizStore.ts';
 
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+// Buzz adjudication window is 80ms; wait a bit beyond it for the winner to settle.
+const waitForBuzz = () => sleep(150);
+
 test('QuizStore initialization has 6 participants and default state', () => {
   const state = quizStore.getState();
   assert.equal(state.participants.length, 6);
@@ -61,16 +65,18 @@ test('Round 2: Rapid fire tallies +10 points per correct answer', () => {
   assert.equal(state.round2State.passedCount, 1);
 });
 
-test('Round 3: Buzzer option selection before reveal and auto-evaluation on reveal', () => {
+test('Round 3: Buzzer option selection before reveal and auto-evaluation on reveal', async () => {
   quizStore.resetQuiz();
   quizStore.setPhase('ROUND_3_ACTIVE');
   quizStore.setRound3Question(0);
   quizStore.unlockBuzzer();
 
-  // Participant 2 buzzes in
+  // Participant 2 buzzes in — adjudicated ~80ms later
   const buzzRes = quizStore.pressBuzzer('p2');
   assert.equal(buzzRes.success, true);
-  assert.equal(buzzRes.buzzedFirst, true);
+  assert.equal(buzzRes.pending, true);
+  await waitForBuzz();
+  assert.equal(quizStore.getState().buzzerState.buzzedParticipantId, 'p2');
 
   // Question 0 correct option is 1 ('Bhagavata Purana (Srimad-Bhagavatam)')
   const currentQ = quizStore.getState().round3Questions[0];
@@ -94,6 +100,8 @@ test('Round 3: Buzzer option selection before reveal and auto-evaluation on reve
   quizStore.setRound3Question(1);
   quizStore.unlockBuzzer();
   quizStore.pressBuzzer('p5');
+  await waitForBuzz();
+  assert.equal(quizStore.getState().buzzerState.buzzedParticipantId, 'p5');
 
   // p5 selects wrong option (e.g. option 3 when answer is 1)
   const wrongIdx = (quizStore.getState().round3Questions[1].correctOptionIndex + 1) % 4;
@@ -107,4 +115,69 @@ test('Round 3: Buzzer option selection before reveal and auto-evaluation on reve
   // -5 penalty applied
   assert.equal(state.participants[4].scores.round3, -5);
   assert.equal(state.participants[4].totalScore, -5);
+});
+
+// Wait until the scheduled buzzer-open instant is comfortably in the past,
+// so simulated clientTs tap-times (relative to openAt) are legitimately old.
+const waitUntilBuzzerOpen = async () => {
+  const openAt = quizStore.getState().buzzerState.openAtServerTs;
+  await sleep(Math.max(0, openAt - Date.now()) + 50);
+  return openAt;
+};
+
+test('Round 3 fairness: earlier synced timestamp wins over earlier packet arrival', async () => {
+  quizStore.resetQuiz();
+  quizStore.setPhase('ROUND_3_ACTIVE');
+  quizStore.setRound3Question(0);
+  quizStore.unlockBuzzer();
+  const openAt = await waitUntilBuzzerOpen();
+
+  // p3's packet ARRIVES first but its synced tap was at openAt+40;
+  // p4's packet arrives second but its synced tap was at openAt+12 —
+  // i.e. p4 physically tapped first. p4 must win.
+  // This is the core anti-latency-bias guarantee.
+  quizStore.pressBuzzer('p3', openAt + 40);
+  quizStore.pressBuzzer('p4', openAt + 12);
+  await waitForBuzz();
+
+  const state = quizStore.getState();
+  assert.equal(state.buzzerState.buzzedParticipantId, 'p4');
+});
+
+test('Round 3 fairness: near-simultaneous buzzes flag a contested photo-finish', async () => {
+  quizStore.resetQuiz();
+  quizStore.setPhase('ROUND_3_ACTIVE');
+  quizStore.setRound3Question(0);
+  quizStore.unlockBuzzer();
+  const openAt = await waitUntilBuzzerOpen();
+
+  quizStore.pressBuzzer('p1', openAt + 10);
+  quizStore.pressBuzzer('p6', openAt + 18); // 8ms behind -> contested
+  await waitForBuzz();
+
+  const state = quizStore.getState();
+  assert.equal(state.buzzerState.buzzedParticipantId, 'p1');
+  assert.equal(state.buzzerState.contested.runnerUpParticipantId, 'p6');
+  assert.equal(state.buzzerState.contested.marginMs, 8);
+});
+
+test('Round 3 fairness: taps before the scheduled open cannot win early', async () => {
+  quizStore.resetQuiz();
+  quizStore.setPhase('ROUND_3_ACTIVE');
+  quizStore.setRound3Question(0);
+  quizStore.unlockBuzzer();
+  const openAt = await waitUntilBuzzerOpen();
+
+  // p2 claims a tap timestamped BEFORE the buzzer opened — clamped to openAt.
+  quizStore.pressBuzzer('p2', openAt - 500);
+  await sleep(5);
+  quizStore.pressBuzzer('p5', openAt + 5); // legit tap just after open
+  await waitForBuzz();
+
+  const state = quizStore.getState();
+  // p2's effective time is clamped to openAt and flagged early for the host;
+  // pre-open taps can't beat the gate but aren't dropped either.
+  assert.equal(state.buzzerState.buzzedParticipantId, 'p2');
+  assert.equal(state.buzzerState.buzzedAt, openAt);
+  assert.equal(state.buzzerState.buzzHistory[0].early, true);
 });

@@ -6,6 +6,7 @@ export async function GET() {
   const encoder = new TextEncoder();
 
   let cleanup: (() => void) | null = null;
+  let heartbeat: ReturnType<typeof setInterval> | null = null;
 
   const stream = new ReadableStream({
     start(controller) {
@@ -23,10 +24,23 @@ export async function GET() {
           // Stream might be closed
         }
       });
+
+      // Heartbeat every 4s so WiFi/NAT doesn't idle-drop the connection and
+      // dead sockets surface quickly instead of hanging silently for minutes.
+      heartbeat = setInterval(() => {
+        try {
+          controller.enqueue(encoder.encode(': ping\n\n'));
+        } catch {
+          if (heartbeat) clearInterval(heartbeat);
+        }
+      }, 4000);
     },
     cancel() {
       if (cleanup) {
         cleanup();
+      }
+      if (heartbeat) {
+        clearInterval(heartbeat);
       }
     },
   });

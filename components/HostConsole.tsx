@@ -980,6 +980,15 @@ export function HostConsole({ state, executeAction }: HostConsoleProps) {
             {/* Buzzer Spotlight Box */}
             {buzzerState.status === 'BUZZED' && (
               <div className="p-5 rounded-2xl bg-gradient-to-r from-amber-600 to-yellow-500 text-black space-y-3 shadow-xl">
+                {/* Photo-finish warning: top two buzzes inside the tie window */}
+                {buzzerState.contested && (
+                  <div className="p-2.5 rounded-xl bg-rose-600 text-white text-center text-xs font-black uppercase tracking-wider animate-pulse">
+                    ⚠️ Photo finish — margin {buzzerState.contested.marginMs}ms vs{' '}
+                    {getParticipantById(buzzerState.contested.runnerUpParticipantId)?.spiritualName ||
+                      buzzerState.contested.runnerUpParticipantId}
+                    . Host decision final — consider a tiebreaker.
+                  </div>
+                )}
                 <div className="flex flex-wrap items-center justify-between gap-3">
                   <div className="flex items-center gap-3">
                     <span className="text-3xl">{buzzedParticipant?.avatar}</span>
@@ -1002,6 +1011,25 @@ export function HostConsole({ state, executeAction }: HostConsoleProps) {
                     </div>
                   )}
                 </div>
+
+                {/* Fair-timing margin table: every buzz ranked by synced tap time */}
+                {buzzerState.buzzHistory.length > 1 && (
+                  <div className="rounded-xl bg-black/15 px-3 py-2 flex flex-wrap gap-x-4 gap-y-1">
+                    {[...buzzerState.buzzHistory]
+                      .sort((a, b) => a.timestamp - b.timestamp)
+                      .map((rec, i) => {
+                        const bp = getParticipantById(rec.participantId);
+                        const delta = rec.timestamp - (buzzerState.buzzedAt ?? rec.timestamp);
+                        return (
+                          <span key={rec.participantId} className="text-[11px] font-bold text-black/80">
+                            {i + 1}. {bp?.spiritualName || rec.participantId}{' '}
+                            <span className="opacity-70">+{Math.max(0, delta)}ms</span>
+                            {rec.early && <span className="text-rose-700"> (early)</span>}
+                          </span>
+                        );
+                      })}
+                  </div>
+                )}
 
                 {/* Primary Action Buttons */}
                 <div className="flex flex-wrap items-center gap-2.5 pt-1">
