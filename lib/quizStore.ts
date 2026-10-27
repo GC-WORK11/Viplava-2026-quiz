@@ -669,11 +669,30 @@ export const quizStore = {
       submissions: {},
       isCompleted: false,
       winnerParticipantId: null,
+      isQuestionLaunched: false,
     };
-    state.timer.secondsLeft = 20;
-    state.timer.initialSeconds = 20;
-    state.timer.isRunning = true;
+    state.timer.isRunning = false;
 
+    broadcastChange();
+    return quizStore.getState();
+  },
+
+  launchTieBreakerQuestion: () => {
+    const state = global.__GLOBAL_QUIZ_STATE__!;
+    state.tieBreakerState.isQuestionLaunched = true;
+    state.timer.isRunning = false;
+    broadcastChange();
+    return quizStore.getState();
+  },
+
+  setTieBreakerQuestion: (questionIndex: number) => {
+    const state = global.__GLOBAL_QUIZ_STATE__!;
+    state.tieBreakerState.currentQuestionIndex = Math.min(questionIndex, 2); // Up to 3 questions (0, 1, 2)
+    state.tieBreakerState.submissions = {};
+    state.tieBreakerState.isCompleted = false;
+    state.tieBreakerState.winnerParticipantId = null;
+    state.tieBreakerState.isQuestionLaunched = false;
+    state.timer.isRunning = false;
     broadcastChange();
     return quizStore.getState();
   },
@@ -977,6 +996,9 @@ export const quizStore = {
         ...p,
         totalScore: 0,
         scores: { round1: 0, round2: 0, round3: 0, tieBreaker: 0 },
+        isClaimed: false,
+        connected: false,
+        claimedName: '',
       })),
     };
 

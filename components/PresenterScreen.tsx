@@ -537,12 +537,28 @@ export function PresenterScreen({ state, isStandalone = false }: PresenterScreen
                   <h3 className="text-2xl md:text-4xl font-cinzel font-bold text-amber-100 leading-snug">
                     {currentQ?.question || 'Waiting for next question...'}
                   </h3>
+
+                  {currentQ?.options && currentQ.options.length > 0 && (
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-4 max-w-2xl mx-auto text-left">
+                      {currentQ.options.map((opt, i) => (
+                        <div
+                          key={i}
+                          className="p-3.5 rounded-xl bg-black/50 border border-amber-500/30 text-amber-100 text-sm flex items-center gap-3 font-medium"
+                        >
+                          <span className="w-7 h-7 rounded-lg bg-amber-500/20 text-amber-300 font-bold flex items-center justify-center shrink-0">
+                            {['A', 'B', 'C', 'D'][i]}
+                          </span>
+                          <span>{opt}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
               </div>
             );
           })()}
 
-          {/* 5. ROUND 3 ACTIVE: BUZZER ROUND (CORE USER REQUIREMENT) */}
+          {/* 5. ROUND 3 ACTIVE: BUZZER ROUND */}
           {phase === 'ROUND_3_ACTIVE' && (() => {
             const q = round3Questions[round3State.currentQuestionIndex];
             const buzzedParticipant = getParticipantById(buzzerState.buzzedParticipantId);
@@ -693,6 +709,73 @@ export function PresenterScreen({ state, isStandalone = false }: PresenterScreen
                     </div>
                   )}
                 </div>
+              </div>
+            );
+          })()}
+
+          {/* 5. TIE BREAKER ACTIVE */}
+          {phase === 'TIE_BREAKER_ACTIVE' && (() => {
+            const qIndex = tieBreakerState.currentQuestionIndex;
+            const q = tieBreakerQuestions[qIndex];
+            const isLaunched = tieBreakerState.isQuestionLaunched;
+            const tiedParticipants = participants.filter((p) => tieBreakerState.tiedParticipantIds.includes(p.id));
+
+            return (
+              <div className="max-w-4xl mx-auto w-full space-y-6 animate-fadeIn my-auto">
+                {!isLaunched ? (
+                  <div className="p-8 md:p-12 rounded-3xl bg-gradient-to-b from-[#101f35] to-[#081224] border-2 border-cyan-500/40 text-center space-y-6 shadow-2xl">
+                    <div className="text-5xl animate-bounce">⚡</div>
+                    <div className="space-y-2">
+                      <div className="text-xs font-bold text-cyan-400 uppercase tracking-widest">
+                        Fastest Finger Speed Battle
+                      </div>
+                      <h2 className="text-3xl md:text-5xl font-black font-cinzel text-cyan-200">
+                        Tie Breaker: Question #{qIndex + 1}
+                      </h2>
+                      <p className="text-base text-cyan-200/80 max-w-lg mx-auto">
+                        Quiz Master is preparing the question for tied contestants. Get ready on your mobile devices!
+                      </p>
+                    </div>
+
+                    <div className="p-4 rounded-2xl bg-black/50 border border-cyan-500/30 max-w-xl mx-auto space-y-2">
+                      <div className="text-xs font-bold text-cyan-400 uppercase">Tied Contestants in Duel:</div>
+                      <div className="flex items-center justify-center gap-4 flex-wrap">
+                        {tiedParticipants.map((p) => (
+                          <div key={p.id} className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-cyan-950/80 border border-cyan-400 text-cyan-100 text-xs font-bold">
+                            <span className="text-lg">{p.avatar}</span>
+                            <span>Seat {p.seatNumber}: {p.spiritualName} ({p.totalScore} pts)</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="p-8 rounded-3xl bg-gradient-to-b from-[#101f35] to-[#081224] border-2 border-cyan-500/40 shadow-2xl space-y-6">
+                    <div className="flex items-center justify-between pb-3 border-b border-cyan-500/30">
+                      <span className="text-xs font-bold text-cyan-400 uppercase tracking-wider">
+                        ⚡ Speed Tie Breaker Question #{qIndex + 1}
+                      </span>
+                      <span className="px-3 py-1 rounded-xl bg-cyan-500 text-black font-black text-xs uppercase animate-pulse">
+                        Synchronized Speed Duel Live
+                      </span>
+                    </div>
+
+                    <p className="text-2xl md:text-4xl font-cinzel font-bold text-cyan-100 text-center leading-relaxed">
+                      &ldquo;{q?.question}&rdquo;
+                    </p>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5 pt-2">
+                      {q?.options.map((opt, idx) => (
+                        <div key={idx} className="p-4 rounded-2xl bg-black/40 border border-cyan-500/30 text-cyan-100 flex items-center gap-3">
+                          <span className="w-8 h-8 rounded-xl bg-cyan-500/20 text-cyan-300 font-black flex items-center justify-center shrink-0">
+                            {['A', 'B', 'C', 'D'][idx]}
+                          </span>
+                          <span className="text-base font-semibold">{opt}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
             );
           })()}

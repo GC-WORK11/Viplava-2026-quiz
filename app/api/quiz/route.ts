@@ -113,6 +113,14 @@ export async function POST(req: NextRequest) {
         result = quizStore.initTieBreaker(payload.tiedParticipantIds);
         break;
 
+      case 'launch_tie_breaker_question':
+        result = quizStore.launchTieBreakerQuestion();
+        break;
+
+      case 'set_tie_breaker_question':
+        result = quizStore.setTieBreakerQuestion(payload.questionIndex);
+        break;
+
       case 'submit_tie_breaker_answer':
         result = quizStore.submitTieBreakerAnswer(
           payload.participantId,

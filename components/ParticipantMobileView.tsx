@@ -154,6 +154,27 @@ export function ParticipantMobileView({ state, executeAction, forcedSeat }: Part
   const participant = participants.find((p) => p.seatNumber === selectedSeat);
   const participantId = participant?.id || `p${selectedSeat}`;
 
+  // Auto-clear local storage when host releases seat or resets check-ins/quiz
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    if (storedHasClaimed && participant && !participant.isClaimed) {
+      try {
+        localStorage.removeItem('viplava_has_claimed');
+        localStorage.removeItem('viplava_participant_seat');
+        localStorage.removeItem('viplava_participant_name');
+        window.dispatchEvent(new Event('viplava-seat-change'));
+        window.dispatchEvent(new Event('viplava-claimed-change'));
+      } catch {
+        // Safe fallback
+      }
+      setTimeout(() => {
+        setOverrideSeat(null);
+        setIsEditingClaim(false);
+      }, 0);
+    }
+  }, [participant, storedHasClaimed]);
+
   // Buzzer action handler
   const handlePressBuzzer = async () => {
     if (!buzzerState.isUnlocked) return;
@@ -259,22 +280,25 @@ export function ParticipantMobileView({ state, executeAction, forcedSeat }: Part
             <div className="flex items-center gap-1">
               {[1, 2, 3, 4, 5, 6].map((seat) => {
                 const targetP = participants.find((p) => p.seatNumber === seat);
+                const isSelected = seat === selectedSeat;
                 const isClaimedByOther = targetP?.isClaimed && targetP?.seatNumber !== selectedSeat;
+                // Disable other seats if user has already claimed a seat
+                const isSeatDisabled = (storedHasClaimed || participant?.isClaimed) ? !isSelected : isClaimedByOther;
 
                 return (
                   <button
                     key={seat}
                     type="button"
-                    disabled={isClaimedByOther}
+                    disabled={isSeatDisabled}
                     onClick={() => handleSelectSeat(seat)}
                     className={`w-6 h-6 rounded-md text-[11px] font-bold border transition-all ${
-                      seat === selectedSeat
+                      isSelected
                         ? 'bg-amber-500 text-black border-yellow-200 font-black shadow'
-                        : isClaimedByOther
+                        : isSeatDisabled
                         ? 'bg-black/20 text-stone-600 border-stone-800 cursor-not-allowed opacity-30'
                         : 'bg-black/40 text-amber-300/60 border-amber-500/20 hover:text-amber-100 hover:border-amber-400'
                     }`}
-                    title={isClaimedByOther ? `Seat ${seat} already claimed by ${targetP?.claimedName || targetP?.spiritualName}` : `Select Seat ${seat}`}
+                    title={isSelected ? `Your Seat ${seat}` : isSeatDisabled ? `Seat ${seat} locked` : `Select Seat ${seat}`}
                   >
                     {seat}
                   </button>
@@ -574,14 +598,31 @@ export function ParticipantMobileView({ state, executeAction, forcedSeat }: Part
               <div className="space-y-3 animate-fadeIn">
                 <div className="p-4 rounded-2xl bg-gradient-to-r from-amber-600 via-yellow-500 to-amber-600 text-black text-center shadow-lg font-black">
                   <div className="text-xs uppercase tracking-widest">⚡ YOUR RAPID FIRE BLITZ!</div>
-                  <div className="text-sm">Q#{round2State.currentQuestionIndex + 1} / 10 • Clock: {timer.secondsLeft}s</div>
+                  <div className="text-sm">Q#{round2State.currentQuestionIndex + 1} / 10</div>
                 </div>
 
-                <div className="p-5 rounded-2xl bg-[#180f2d] border border-amber-500/30 text-center space-y-2">
+                <div className="p-5 rounded-2xl bg-[#180f2d] border border-amber-500/30 text-center space-y-3">
                   <div className="text-xs text-amber-400/80 font-bold uppercase">
                     Rapid Question {round2State.currentQuestionIndex + 1} / 10
                   </div>
                   <p className="text-base font-bold text-amber-100">{currentQ?.question}</p>
+
+                  {/* Optional Options for Rapid Fire if configured */}
+                  {currentQ?.options && currentQ.options.length > 0 && (
+                    <div className="grid grid-cols-1 gap-2 pt-2 text-left">
+                      {currentQ.options.map((opt, oIdx) => (
+                        <div
+                          key={oIdx}
+                          className="p-3 rounded-xl bg-black/50 border border-amber-500/30 text-amber-200 text-xs font-semibold flex items-center gap-2"
+                        >
+                          <span className="w-6 h-6 rounded bg-amber-500/20 text-amber-300 font-bold flex items-center justify-center">
+                            {['A', 'B', 'C', 'D'][oIdx]}
+                          </span>
+                          <span>{opt}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
               </div>
             );
@@ -601,110 +642,132 @@ export function ParticipantMobileView({ state, executeAction, forcedSeat }: Part
                     <span>Buzzer Question #{round3State.currentQuestionIndex + 1}</span>
                     <span className="text-emerald-400">+15 / -5</span>
                   </div>
-                  <p className="text-xs sm:text-sm font-semibold text-amber-100 line-clamp-2">
+                  <p className="text-xs sm:text-sm font-semibold text-amber-100">
                     {q?.question}
                   </p>
                 </div>
 
-                {/* If no one has buzzed in or buzzer is active: show Buzzer Button */}
+                {/* Question Options (DISPLAYED TO ALL, BUT DISABLED BEFORE BUZZING IN) */}
                 {buzzerState.status !== 'BUZZED' && !isRevealed && (
-                  <div className="flex flex-col items-center justify-center py-2">
-                    <button
-                      onClick={handlePressBuzzer}
-                      disabled={!buzzerState.isUnlocked}
-                      className={`w-52 h-52 sm:w-56 sm:h-56 rounded-full flex flex-col items-center justify-center select-none touch-manipulation relative active:scale-95 transition-all ${
-                        buzzerState.isUnlocked
-                          ? 'bg-gradient-to-b from-amber-500 via-yellow-500 to-amber-600 text-black shadow-[0_0_40px_rgba(245,158,11,0.6)] border-8 border-amber-300 animate-pulse-glow cursor-pointer'
-                          : 'bg-gradient-to-b from-[#2b183a] to-[#160d1f] text-amber-400/30 border-8 border-purple-900/40 opacity-70 cursor-not-allowed'
-                      }`}
-                    >
-                      <Zap className={`w-12 h-12 mb-1 ${buzzerState.isUnlocked ? 'text-black' : 'text-amber-500/30'}`} />
-                      <span className="font-cinzel font-black text-2xl tracking-wider">
-                        {buzzerState.isUnlocked ? 'BUZZ IN!' : 'LOCKED'}
-                      </span>
-                      <span className="text-[10px] font-bold uppercase tracking-widest mt-1 opacity-90">
-                        {buzzerState.isUnlocked ? 'Tap fast to answer' : 'Wait for Host unlock'}
-                      </span>
-                    </button>
+                  <div className="space-y-3">
+                    <div className="grid grid-cols-1 gap-2">
+                      {q?.options.map((option, idx) => (
+                        <div
+                          key={idx}
+                          className="p-3.5 rounded-xl bg-black/40 border border-amber-500/20 text-amber-200/70 text-xs text-left flex items-center gap-2.5 opacity-80"
+                        >
+                          <span className="w-6 h-6 rounded bg-black/30 text-amber-400 font-bold flex items-center justify-center">
+                            {letters[idx]}
+                          </span>
+                          <span>{option}</span>
+                        </div>
+                      ))}
+                    </div>
+
+                    <div className="flex flex-col items-center justify-center py-2">
+                      <button
+                        onClick={handlePressBuzzer}
+                        disabled={!buzzerState.isUnlocked}
+                        className={`w-48 h-48 sm:w-52 sm:h-52 rounded-full flex flex-col items-center justify-center select-none touch-manipulation relative active:scale-95 transition-all ${
+                          buzzerState.isUnlocked
+                            ? 'bg-gradient-to-b from-amber-500 via-yellow-500 to-amber-600 text-black shadow-[0_0_40px_rgba(245,158,11,0.6)] border-8 border-amber-300 animate-pulse-glow cursor-pointer'
+                            : 'bg-gradient-to-b from-[#2b183a] to-[#160d1f] text-amber-400/30 border-8 border-purple-900/40 opacity-70 cursor-not-allowed'
+                        }`}
+                      >
+                        <Zap className={`w-10 h-10 mb-1 ${buzzerState.isUnlocked ? 'text-black' : 'text-amber-500/30'}`} />
+                        <span className="font-cinzel font-black text-xl tracking-wider">
+                          {buzzerState.isUnlocked ? 'BUZZ IN!' : 'LOCKED'}
+                        </span>
+                        <span className="text-[10px] font-bold uppercase tracking-widest mt-1 opacity-90">
+                          {buzzerState.isUnlocked ? 'Tap fast to answer' : 'Wait for Host unlock'}
+                        </span>
+                      </button>
+                    </div>
                   </div>
                 )}
 
-                {/* IF BUZZED IN: Show options to the participant who buzzed! */}
+                {/* IF BUZZED IN: Show options ONLY on the screen of the participant who buzzed! */}
                 {buzzerState.status === 'BUZZED' && (
                   <div className="space-y-3">
                     {didIBuzzFirst ? (
-                      <div className="p-3 rounded-2xl bg-gradient-to-r from-amber-500 to-yellow-400 text-black text-center font-black shadow-lg">
-                        <div className="text-xs uppercase tracking-wider">🎉 YOU BUZZED IN FIRST!</div>
-                        <div className="text-xs font-semibold mt-0.5">
-                          Tap your chosen option below:
+                      <div className="space-y-3">
+                        <div className="p-3 rounded-2xl bg-gradient-to-r from-amber-500 to-yellow-400 text-black text-center font-black shadow-lg">
+                          <div className="text-xs uppercase tracking-wider">🎉 YOU BUZZED IN FIRST!</div>
+                          <div className="text-xs font-semibold mt-0.5">
+                            Tap your chosen option below:
+                          </div>
+                        </div>
+
+                        {/* 4 Options Grid Enabled for Winner */}
+                        <div className="grid grid-cols-1 gap-2.5">
+                          {q?.options.map((option, idx) => {
+                            const isSelected = buzzerState.selectedOptionIndex === idx;
+                            const isCorrect = idx === q.correctOptionIndex;
+
+                            let btnStyle = 'bg-black/50 border-amber-500/30 text-amber-200';
+
+                            if (!isRevealed) {
+                              if (isSelected) {
+                                btnStyle = 'bg-amber-500 text-black font-black border-yellow-200 ring-2 ring-yellow-300 shadow-lg';
+                              }
+                            } else {
+                              if (isSelected && isCorrect) {
+                                btnStyle = 'bg-emerald-600 text-white font-black border-emerald-300';
+                              } else if (isSelected && !isCorrect) {
+                                btnStyle = 'bg-rose-900 text-white font-black border-rose-400';
+                              } else if (isCorrect) {
+                                btnStyle = 'bg-emerald-800 text-emerald-100 font-bold border-emerald-400';
+                              }
+                            }
+
+                            return (
+                              <button
+                                key={idx}
+                                onClick={() => handleSelectBuzzerOption(idx)}
+                                disabled={isRevealed}
+                                className={`p-3.5 rounded-xl border text-left flex items-center justify-between text-xs transition-all active:scale-[0.98] ${btnStyle} ${
+                                  !isRevealed ? 'cursor-pointer hover:border-amber-400' : ''
+                                }`}
+                              >
+                                <div className="flex items-center gap-2.5">
+                                  <span className="w-7 h-7 rounded-lg bg-black/20 flex items-center justify-center font-black text-sm">
+                                    {letters[idx]}
+                                  </span>
+                                  <span className="font-semibold">{option}</span>
+                                </div>
+
+                                {isSelected && !isRevealed && (
+                                  <span className="px-2 py-0.5 rounded bg-black text-amber-300 text-[10px] font-black uppercase">
+                                    Selected ↗
+                                  </span>
+                                )}
+                                {isSelected && isRevealed && isCorrect && (
+                                  <span className="text-[10px] font-black uppercase text-white">
+                                    ✓ Correct (+15)
+                                  </span>
+                                )}
+                                {isSelected && isRevealed && !isCorrect && (
+                                  <span className="text-[10px] font-black uppercase text-white">
+                                    ✗ Wrong (-5)
+                                  </span>
+                                )}
+                              </button>
+                            );
+                          })}
                         </div>
                       </div>
                     ) : (
-                      <div className="p-3 rounded-2xl bg-black/50 border border-amber-500/30 text-center">
-                        <div className="text-xs text-amber-400 font-bold uppercase">Buzzed In:</div>
-                        <div className="text-sm font-bold text-amber-100">
-                          Seat #{buzzerState.buzzedParticipantId?.replace('p', '')} is choosing their answer...
+                      <div className="p-6 rounded-3xl bg-[#180f2d] border border-amber-500/30 text-center space-y-3 animate-fadeIn">
+                        <div className="text-3xl">🔔</div>
+                        <div className="text-xs text-amber-400 font-bold uppercase tracking-wider">Buzzed In First:</div>
+                        <div className="text-lg font-bold font-cinzel text-amber-100">
+                          Seat #{buzzerState.buzzedParticipantId?.replace('p', '')} ({participants.find((p) => p.id === buzzerState.buzzedParticipantId)?.claimedName || participants.find((p) => p.id === buzzerState.buzzedParticipantId)?.spiritualName})
                         </div>
+                        <p className="text-xs text-amber-200/70 leading-relaxed">
+                          Candidate at Seat #{buzzerState.buzzedParticipantId?.replace('p', '')} is choosing their option on their screen. Watch the main projector!
+                        </p>
                       </div>
                     )}
-
-                    {/* 4 Options Grid */}
-                    <div className="grid grid-cols-1 gap-2.5">
-                      {q?.options.map((option, idx) => {
-                        const isSelected = buzzerState.selectedOptionIndex === idx;
-                        const isCorrect = idx === q.correctOptionIndex;
-
-                        let btnStyle = 'bg-black/50 border-amber-500/30 text-amber-200';
-
-                        if (!isRevealed) {
-                          if (isSelected) {
-                            btnStyle = 'bg-amber-500 text-black font-black border-yellow-200 ring-2 ring-yellow-300 shadow-lg';
-                          }
-                        } else {
-                          if (isSelected && isCorrect) {
-                            btnStyle = 'bg-emerald-600 text-white font-black border-emerald-300';
-                          } else if (isSelected && !isCorrect) {
-                            btnStyle = 'bg-rose-900 text-white font-black border-rose-400';
-                          } else if (isCorrect) {
-                            btnStyle = 'bg-emerald-800 text-emerald-100 font-bold border-emerald-400';
-                          }
-                        }
-
-                        return (
-                          <button
-                            key={idx}
-                            onClick={() => didIBuzzFirst && handleSelectBuzzerOption(idx)}
-                            disabled={!didIBuzzFirst || isRevealed}
-                            className={`p-3.5 rounded-xl border text-left flex items-center justify-between text-xs transition-all active:scale-[0.98] ${btnStyle} ${
-                              didIBuzzFirst && !isRevealed ? 'cursor-pointer hover:border-amber-400' : ''
-                            }`}
-                          >
-                            <div className="flex items-center gap-2.5">
-                              <span className="w-7 h-7 rounded-lg bg-black/20 flex items-center justify-center font-black text-sm">
-                                {letters[idx]}
-                              </span>
-                              <span className="font-semibold">{option}</span>
-                            </div>
-
-                            {isSelected && !isRevealed && (
-                              <span className="px-2 py-0.5 rounded bg-black text-amber-300 text-[10px] font-black uppercase">
-                                Selected ↗
-                              </span>
-                            )}
-                            {isSelected && isRevealed && isCorrect && (
-                              <span className="text-[10px] font-black uppercase text-white">
-                                ✓ Correct (+15)
-                              </span>
-                            )}
-                            {isSelected && isRevealed && !isCorrect && (
-                              <span className="text-[10px] font-black uppercase text-white">
-                                ✗ Wrong (-5)
-                              </span>
-                            )}
-                          </button>
-                        );
-                      })}
-                    </div>
                   </div>
                 )}
 
@@ -728,7 +791,7 @@ export function ParticipantMobileView({ state, executeAction, forcedSeat }: Part
 
             if (!isTied) {
               return (
-                <div className="p-6 rounded-2xl bg-[#160d28] border border-cyan-500/30 text-center space-y-2">
+                <div className="p-6 rounded-2xl bg-[#160d28] border border-cyan-500/30 text-center space-y-2 animate-fadeIn">
                   <h4 className="font-bold font-cinzel text-cyan-300">Tie Breaker Active</h4>
                   <p className="text-xs text-amber-200/70">
                     Other participants are resolving a score tie on the projector.
@@ -737,10 +800,23 @@ export function ParticipantMobileView({ state, executeAction, forcedSeat }: Part
               );
             }
 
+            // If selected tied participant, check if host has launched the question
+            if (!tieBreakerState.isQuestionLaunched) {
+              return (
+                <div className="p-6 rounded-3xl bg-[#160d28] border border-cyan-500/40 text-center space-y-3 animate-fadeIn">
+                  <div className="text-3xl">🎯</div>
+                  <h4 className="text-lg font-bold font-cinzel text-cyan-200">You Are Selected for Tie-Breaker!</h4>
+                  <p className="text-xs text-cyan-300/80 leading-relaxed">
+                    Get ready! The host is selecting the participants and will launch Question #{tieBreakerState.currentQuestionIndex + 1} shortly.
+                  </p>
+                </div>
+              );
+            }
+
             return (
-              <div className="space-y-3">
+              <div className="space-y-3 animate-fadeIn">
                 <div className="p-3 rounded-2xl bg-cyan-950/80 border border-cyan-400 text-cyan-200 text-center text-xs font-bold">
-                  🎯 FASTEST-FINGER-FIRST CHALLENGE! Select the answer swiftly!
+                  🎯 FASTEST-FINGER-FIRST Q#{tieBreakerState.currentQuestionIndex + 1}! Select answer swiftly!
                 </div>
                 <div className="p-4 rounded-2xl bg-[#180f2d] border border-cyan-500/30 space-y-3">
                   <p className="text-sm font-bold text-amber-100">{q?.question}</p>
@@ -748,14 +824,15 @@ export function ParticipantMobileView({ state, executeAction, forcedSeat }: Part
                     {q?.options.map((opt, idx) => (
                       <button
                         key={idx}
+                        type="button"
                         onClick={() =>
                           executeAction('submit_tie_breaker_answer', {
                             participantId,
                             optionIndex: idx,
-                            timeTakenMs: 1500,
+                            timeTakenMs: 1200,
                           })
                         }
-                        className="p-3 rounded-xl bg-black/40 hover:bg-cyan-950 border border-cyan-500/30 text-cyan-200 text-xs text-left font-semibold"
+                        className="p-3.5 rounded-xl bg-black/40 hover:bg-cyan-950 border border-cyan-500/30 text-cyan-200 text-xs text-left font-semibold active:scale-[0.98] transition-all"
                       >
                         {['A', 'B', 'C', 'D'][idx]}: {opt}
                       </button>

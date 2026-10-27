@@ -62,6 +62,18 @@ export function HostConsole({ state, executeAction }: HostConsoleProps) {
   const [showRunbookModal, setShowRunbookModal] = useState(false);
   const [networkIpInput, setNetworkIpInput] = useState<string>(state.customHostUrl || state.detectedNetworkIp || '');
 
+  const [isProcessingAction, setIsProcessingAction] = useState(false);
+
+  const safeExecuteAction = async (action: string, payload?: Record<string, unknown>) => {
+    if (isProcessingAction) return { success: false };
+    setIsProcessingAction(true);
+    try {
+      return await executeAction(action, payload);
+    } finally {
+      setTimeout(() => setIsProcessingAction(false), 350);
+    }
+  };
+
   const currentOrigin = React.useSyncExternalStore(subscribeOrigin, getOriginSnapshot, getOriginServerSnapshot);
   const resolvedJoinUrl = resolveParticipantJoinUrl(
     currentOrigin,
@@ -88,28 +100,28 @@ export function HostConsole({ state, executeAction }: HostConsoleProps) {
 
   // Timer controls
   const handleStartTimer = (seconds?: number) => {
-    executeAction('set_timer', {
+    safeExecuteAction('set_timer', {
       secondsLeft: seconds !== undefined ? seconds : timer.secondsLeft,
       isRunning: true,
     });
   };
 
   const handlePauseTimer = () => {
-    executeAction('set_timer', {
+    safeExecuteAction('set_timer', {
       secondsLeft: timer.secondsLeft,
       isRunning: false,
     });
   };
 
   const handleResetTimer = (seconds: number) => {
-    executeAction('set_timer', {
+    safeExecuteAction('set_timer', {
       secondsLeft: seconds,
       isRunning: false,
     });
   };
 
   const handleAddTimer = (seconds: number) => {
-    executeAction('set_timer', {
+    safeExecuteAction('set_timer', {
       secondsLeft: timer.secondsLeft + seconds,
       isRunning: timer.isRunning,
     });
@@ -117,7 +129,7 @@ export function HostConsole({ state, executeAction }: HostConsoleProps) {
 
   // Phase navigation
   const goToPhase = (newPhase: QuizPhase) => {
-    executeAction('set_phase', { phase: newPhase });
+    safeExecuteAction('set_phase', { phase: newPhase });
   };
 
   const goToNextPhase = () => {
@@ -842,6 +854,22 @@ export function HostConsole({ state, executeAction }: HostConsoleProps) {
                 Active Question #{qIndex + 1} of 10:
               </div>
               <p className="text-lg font-bold text-amber-100">{currentQ?.question}</p>
+
+              {/* Render options if present */}
+              {currentQ?.options && currentQ.options.length > 0 && (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-2">
+                  {currentQ.options.map((opt, i) => (
+                    <div
+                      key={i}
+                      className="p-2.5 rounded-xl bg-black/40 border border-amber-500/20 text-xs text-amber-200 flex items-center gap-2"
+                    >
+                      <span className="font-bold text-amber-400">{['A', 'B', 'C', 'D'][i]}:</span>
+                      <span>{opt}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+
               <div className="pt-2 text-xs text-emerald-300 font-bold">
                 Answer Key: {currentQ?.answer}
               </div>
@@ -1202,19 +1230,42 @@ export function HostConsole({ state, executeAction }: HostConsoleProps) {
 
       {/* 5. TIE BREAKER CONTROLS */}
       {phase === 'TIE_BREAKER_ACTIVE' && (() => {
+        const qIndex = tieBreakerState.currentQuestionIndex;
+        const currentQ = tieBreakerQuestions[qIndex];
+
         return (
           <div className="p-6 rounded-3xl bg-[#180f2d] border-2 border-cyan-500/40 space-y-6 shadow-xl">
-            <div className="space-y-1">
-              <span className="text-xs font-bold text-cyan-400 uppercase tracking-widest">
-                Fastest-Finger-First Control
-              </span>
-              <h3 className="text-xl font-bold font-cinzel text-cyan-200">
-                Launch Synchronized Speed Question
-              </h3>
+            {/* Header & Question Jumper (up to 3 questions) */}
+            <div className="flex flex-wrap items-center justify-between gap-3 pb-4 border-b border-cyan-500/20">
+              <div>
+                <span className="text-xs font-bold text-cyan-400 uppercase tracking-widest">
+                  Tie Breaker • Speed Battle
+                </span>
+                <h3 className="text-xl font-bold font-cinzel text-cyan-200">
+                  Question #{qIndex + 1} of {Math.min(tieBreakerQuestions.length, 3)}
+                </h3>
+              </div>
+
+              <div className="flex items-center gap-1.5">
+                {[0, 1, 2].slice(0, Math.min(tieBreakerQuestions.length, 3)).map((idx) => (
+                  <button
+                    key={idx}
+                    onClick={() => safeExecuteAction('set_tie_breaker_question', { questionIndex: idx })}
+                    className={`px-3 py-1 rounded-lg text-xs font-bold border transition-colors ${
+                      idx === qIndex
+                        ? 'bg-cyan-500 text-black border-cyan-300'
+                        : 'bg-black/40 text-cyan-300/70 border-cyan-500/30'
+                    }`}
+                  >
+                    TB Q{idx + 1}
+                  </button>
+                ))}
+              </div>
             </div>
 
+            {/* Step 1: Select Tied Participants */}
             <div className="p-4 rounded-2xl bg-black/40 border border-cyan-500/30 space-y-3">
-              <div className="text-xs font-bold text-cyan-400 uppercase">Select Tied Participants:</div>
+              <div className="text-xs font-bold text-cyan-400 uppercase">1. Selected Tied Participants:</div>
               <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-2">
                 {participants.map((p) => {
                   const isSelected = tieBreakerState.tiedParticipantIds.includes(p.id);
@@ -1225,19 +1276,85 @@ export function HostConsole({ state, executeAction }: HostConsoleProps) {
                         const newTied = isSelected
                           ? tieBreakerState.tiedParticipantIds.filter((id) => id !== p.id)
                           : [...tieBreakerState.tiedParticipantIds, p.id];
-                        executeAction('init_tie_breaker', { tiedParticipantIds: newTied });
+                        safeExecuteAction('init_tie_breaker', { tiedParticipantIds: newTied });
                       }}
                       className={`p-2.5 rounded-xl border text-center transition-all ${
                         isSelected
-                          ? 'bg-cyan-600 text-black border-cyan-300 font-bold'
+                          ? 'bg-cyan-600 text-black border-cyan-300 font-bold shadow'
                           : 'bg-black/30 border-slate-700 text-slate-300'
                       }`}
                     >
                       <div className="text-xl">{p.avatar}</div>
-                      <div className="text-xs truncate">{p.spiritualName}</div>
+                      <div className="text-xs font-bold truncate">{p.spiritualName}</div>
+                      <div className="text-[10px] text-cyan-200 font-mono">{p.totalScore} pts</div>
                     </button>
                   );
                 })}
+              </div>
+            </div>
+
+            {/* Question Details & Launch Controls */}
+            <div className="p-5 rounded-2xl bg-black/50 border border-cyan-500/30 space-y-4">
+              <div className="flex items-center justify-between">
+                <div className="text-xs font-bold text-cyan-400 uppercase">
+                  2. Question #{qIndex + 1} Preview &amp; Launch Status:
+                </div>
+                <span
+                  className={`px-3 py-1 rounded-xl text-xs font-black uppercase ${
+                    tieBreakerState.isQuestionLaunched
+                      ? 'bg-emerald-500 text-black animate-pulse'
+                      : 'bg-amber-500/30 border border-amber-400 text-amber-200'
+                  }`}
+                >
+                  {tieBreakerState.isQuestionLaunched ? '🚀 QUESTION LIVE ON TIED DEVICES' : '⏳ WAITING TO LAUNCH'}
+                </span>
+              </div>
+
+              <p className="text-lg font-bold text-cyan-100">{currentQ?.question}</p>
+
+              {currentQ?.options && (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  {currentQ.options.map((opt, i) => (
+                    <div
+                      key={i}
+                      className={`p-2.5 rounded-xl border text-xs flex items-center justify-between ${
+                        i === currentQ.correctOptionIndex
+                          ? 'bg-emerald-950/60 border-emerald-500/50 text-emerald-300 font-bold'
+                          : 'bg-black/40 border-cyan-500/20 text-cyan-200/80'
+                      }`}
+                    >
+                      <div className="flex items-center gap-2">
+                        <span className="font-bold text-cyan-400">{['A', 'B', 'C', 'D'][i]}:</span>
+                        <span>{opt}</span>
+                      </div>
+                      {i === currentQ.correctOptionIndex && (
+                        <span className="text-[10px] bg-emerald-500 text-black px-1.5 py-0.5 rounded font-black">
+                          CORRECT
+                        </span>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* Launch Question Button */}
+              <div className="pt-2 flex items-center justify-between gap-3">
+                <button
+                  onClick={() => safeExecuteAction('launch_tie_breaker_question')}
+                  disabled={Boolean(tieBreakerState.isQuestionLaunched)}
+                  className="px-6 py-3 rounded-2xl bg-gradient-to-r from-cyan-500 to-blue-500 hover:from-cyan-400 hover:to-blue-400 disabled:opacity-40 text-black font-black text-sm shadow-xl flex items-center gap-2 transition-all active:scale-95"
+                >
+                  <span>🚀 Launch Question #{qIndex + 1} to Tied Devices</span>
+                </button>
+
+                {qIndex < 2 && (
+                  <button
+                    onClick={() => safeExecuteAction('set_tie_breaker_question', { questionIndex: qIndex + 1 })}
+                    className="px-4 py-2.5 rounded-xl bg-cyan-950/80 hover:bg-cyan-900 border border-cyan-500/40 text-cyan-200 text-xs font-bold"
+                  >
+                    Next Tie Question (#{qIndex + 2}) →
+                  </button>
+                )}
               </div>
             </div>
 
@@ -1254,22 +1371,83 @@ export function HostConsole({ state, executeAction }: HostConsoleProps) {
       })()}
 
       {/* 6. LEADERBOARD & PODIUM DIRECT ACTIONS */}
-      {(phase.endsWith('_LEADERBOARD') || phase === 'FINAL_PODIUM') && (
-        <div className="p-6 rounded-3xl bg-[#180f2d] border border-amber-500/40 flex items-center justify-between gap-4">
-          <div>
-            <div className="text-xs font-bold uppercase text-amber-400">Phase Overview</div>
-            <div className="text-lg font-bold text-amber-100">
-              {phase === 'FINAL_PODIUM' ? 'Grand Final Podium Display Active' : 'Round Leaderboard Display Active'}
+      {(phase.endsWith('_LEADERBOARD') || phase === 'FINAL_PODIUM') && (() => {
+        const sortedForTie = [...participants].sort((a, b) => b.totalScore - a.totalScore);
+        const hasTieInTop3 =
+          (sortedForTie.length >= 2 && sortedForTie[0].totalScore === sortedForTie[1].totalScore) ||
+          (sortedForTie.length >= 3 && sortedForTie[1].totalScore === sortedForTie[2].totalScore);
+
+        const tiedIds = sortedForTie
+          .filter((p, idx, arr) => {
+            if (idx < 3) {
+              return arr.some((other, oIdx) => oIdx < 3 && oIdx !== idx && other.totalScore === p.totalScore);
+            }
+            return false;
+          })
+          .map((p) => p.id);
+
+        return (
+          <div className="p-6 rounded-3xl bg-[#180f2d] border border-amber-500/40 space-y-4">
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+              <div>
+                <div className="text-xs font-bold uppercase text-amber-400">Phase Overview</div>
+                <div className="text-lg font-bold text-amber-100">
+                  {phase === 'FINAL_PODIUM' ? 'Grand Final Podium Display Active' : 'Round Leaderboard Display Active'}
+                </div>
+              </div>
+
+              {/* Special Tie Detection Guidance after Round 3 Leaderboard */}
+              {phase === 'ROUND_3_LEADERBOARD' && (
+                <div className="flex items-center gap-2 flex-wrap">
+                  {hasTieInTop3 ? (
+                    <>
+                      <button
+                        onClick={() => {
+                          safeExecuteAction('init_tie_breaker', { tiedParticipantIds: tiedIds });
+                          goToPhase('TIE_BREAKER_RULES');
+                        }}
+                        className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-cyan-500 to-blue-500 hover:from-cyan-400 hover:to-blue-400 text-black font-black text-xs shadow animate-bounce"
+                      >
+                        ⚡ Launch Optional Tie-Breaker →
+                      </button>
+                      <button
+                        onClick={() => goToPhase('FINAL_PODIUM')}
+                        className="px-4 py-2.5 rounded-xl bg-amber-950/80 hover:bg-amber-900 border border-amber-500/40 text-amber-200 text-xs font-bold"
+                      >
+                        Skip to Final Podium →
+                      </button>
+                    </>
+                  ) : (
+                    <button
+                      onClick={() => goToPhase('FINAL_PODIUM')}
+                      className="px-6 py-2.5 rounded-xl bg-gradient-to-r from-amber-600 to-amber-700 hover:from-amber-500 text-black font-extrabold text-xs shadow"
+                    >
+                      Proceed to Final Podium →
+                    </button>
+                  )}
+                </div>
+              )}
+
+              {phase !== 'ROUND_3_LEADERBOARD' && (
+                <button
+                  onClick={goToNextPhase}
+                  className="px-6 py-2.5 rounded-xl bg-gradient-to-r from-amber-600 to-amber-700 hover:from-amber-500 text-black font-bold text-sm shadow"
+                >
+                  Advance to Next Phase →
+                </button>
+              )}
             </div>
+
+            {phase === 'ROUND_3_LEADERBOARD' && (
+              <div className={`p-3.5 rounded-2xl border text-xs font-bold ${hasTieInTop3 ? 'bg-cyan-950/80 border-cyan-400 text-cyan-200' : 'bg-emerald-950/60 border-emerald-500/40 text-emerald-300'}`}>
+                {hasTieInTop3
+                  ? '⚠️ Tie detected in top 3 positions! Click "Launch Optional Tie-Breaker" above to break the tie, or "Skip to Final Podium" if not needed.'
+                  : '✓ Clear top 3 rank order. No Tie-Breaker needed! Proceed directly to Final Podium.'}
+              </div>
+            )}
           </div>
-          <button
-            onClick={goToNextPhase}
-            className="px-6 py-2.5 rounded-xl bg-gradient-to-r from-amber-600 to-amber-700 hover:from-amber-500 text-black font-bold text-sm shadow"
-          >
-            Advance to Next Phase →
-          </button>
-        </div>
-      )}
+        );
+      })()}
 
       {/* MANUAL SCORE EDIT MODAL */}
       {showScoreModal && (

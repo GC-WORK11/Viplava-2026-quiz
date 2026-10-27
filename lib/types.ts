@@ -45,6 +45,7 @@ export interface QuestionRound1 {
 export interface RapidQuestion {
   id: string;
   question: string;
+  options?: string[]; // optional MCQ options
   answer: string;
 }
 
@@ -119,6 +120,7 @@ export interface TieBreakerActiveState {
   submissions: Record<string, TieBreakerSubmission>;
   isCompleted: boolean;
   winnerParticipantId: string | null;
+  isQuestionLaunched?: boolean;
 }
 
 export interface QuizRules {
